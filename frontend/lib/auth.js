@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import api from './api';
+import api, { AUTH_TOKEN_KEY } from './api';
 
 const AuthContext = createContext(null);
 
@@ -35,14 +35,19 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
+    if (data.token) window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
     setAdmin(data.admin);
     return data.admin;
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
-    setAdmin(null);
-    router.replace('/login');
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+      setAdmin(null);
+      router.replace('/login');
+    }
   };
 
   return (
