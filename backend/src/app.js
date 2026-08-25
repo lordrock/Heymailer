@@ -26,6 +26,9 @@ const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3100')
 
 app.set('trust proxy', 1);
 
+// Register request logging first so rejected CORS/preflight requests are logged too.
+// Morgan never logs request bodies, so login passwords and SMTP credentials stay out of logs.
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(helmet({ contentSecurityPolicy: false })); // CSP off: we render admin-authored HTML email previews
 app.use(
   cors({
@@ -34,7 +37,9 @@ app.use(
       if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ''))) {
         return callback(null, true);
       }
-      return callback(new Error('Origin is not allowed by CORS.'));
+      const error = new Error(`Origin is not allowed by CORS: ${origin}`);
+      error.status = 403;
+      return callback(error);
     },
     credentials: true,
   })
@@ -42,7 +47,6 @@ app.use(
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

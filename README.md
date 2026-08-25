@@ -55,6 +55,8 @@ Edit `.env`:
   [App Password](https://myaccount.google.com/apppasswords) (16 characters, not your
   normal Gmail password). You can also set/override these later from **Settings** in
   the dashboard.
+- **SMTP_FORCE_IPV4** — defaults to `true` so SMTP works on hosts such as Render
+  that publish no usable IPv6 route even when Gmail DNS returns IPv6 addresses.
 - **SMTP_CREDENTIALS_ENCRYPTION_KEY** — a separate random secret of at least 32
   characters used to encrypt dashboard-saved App Passwords with AES-256-GCM.
   `JWT_SECRET` is used as a fallback, but a dedicated key is recommended. Keep

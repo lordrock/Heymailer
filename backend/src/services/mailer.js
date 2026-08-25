@@ -1,9 +1,39 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns').promises;
+const net = require('net');
+const tls = require('tls');
 const Settings = require('../models/Settings');
 const { decryptSecret } = require('../utils/credentialCrypto');
 
 let cachedTransporter = null;
 let cachedKey = null;
+
+function getIpv4Socket(options, callback) {
+  dns.resolve4(options.host)
+    .then((addresses) => {
+      if (!addresses.length) throw new Error(`No IPv4 address found for ${options.host}.`);
+
+      const connectionOptions = {
+        host: addresses[0],
+        port: options.port,
+      };
+      const socket = options.secure
+        ? tls.connect({ ...connectionOptions, servername: options.host })
+        : net.connect(connectionOptions);
+
+      const connectedEvent = options.secure ? 'secureConnect' : 'connect';
+      socket.once('error', callback);
+      socket.once(connectedEvent, () => {
+        socket.removeListener('error', callback);
+        callback(null, {
+          connection: socket,
+          secured: Boolean(options.secure),
+          servername: options.host,
+        });
+      });
+    })
+    .catch(callback);
+}
 
 /**
  * Builds (and caches) the Nodemailer transporter. The SMTP app password can
@@ -15,8 +45,9 @@ async function getTransporter() {
   const host = process.env.SMTP_HOST || 'smtp.gmail.com';
   const port = Number(process.env.SMTP_PORT) || 587;
   const secure = process.env.SMTP_SECURE === 'true';
+  const forceIpv4 = process.env.SMTP_FORCE_IPV4 !== 'false';
 
-  const key = `${host}:${port}:${user}`;
+  const key = `${host}:${port}:${user}:${forceIpv4 ? 'ipv4' : 'auto'}`;
 
   if (cachedTransporter && cachedKey === key) {
     return cachedTransporter;
@@ -28,12 +59,15 @@ async function getTransporter() {
     });
   }
 
-  cachedTransporter = nodemailer.createTransport({
+  const transportOptions = {
     host,
     port,
     secure,
     auth: { user, pass },
-  });
+  };
+  if (forceIpv4) transportOptions.getSocket = getIpv4Socket;
+
+  cachedTransporter = nodemailer.createTransport(transportOptions);
   cachedKey = key;
 
   return cachedTransporter;
