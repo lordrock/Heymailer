@@ -48,4 +48,40 @@ async function remove(req, res) {
   res.json({ message: 'Group deleted.' });
 }
 
-module.exports = { list, create, update, remove };
+async function transferContacts(req, res) {
+  const { targetGroupId, mode = 'copy' } = req.body;
+  const sourceGroupId = req.params.id;
+
+  if (!['copy', 'move'].includes(mode)) {
+    return res.status(400).json({ message: 'Mode must be copy or move.' });
+  }
+  if (!targetGroupId || String(targetGroupId) === String(sourceGroupId)) {
+    return res.status(400).json({ message: 'Choose a different destination group.' });
+  }
+
+  const [source, target] = await Promise.all([
+    ContactGroup.findById(sourceGroupId),
+    ContactGroup.findById(targetGroupId),
+  ]);
+  if (!source || !target) return res.status(404).json({ message: 'Source or destination group not found.' });
+
+  const sourceId = source._id;
+  const targetId = target._id;
+  const groupsExpression = mode === 'move'
+    ? { $setUnion: [{ $setDifference: [{ $ifNull: ['$groups', []] }, [sourceId]] }, [targetId]] }
+    : { $setUnion: [{ $ifNull: ['$groups', []] }, [targetId]] };
+
+  const result = await Contact.updateMany(
+    { groups: sourceId },
+    [{ $set: { groups: groupsExpression } }]
+  );
+
+  res.json({
+    message: `${result.matchedCount} contact${result.matchedCount === 1 ? '' : 's'} ${mode === 'move' ? 'moved' : 'copied'} to ${target.name}.`,
+    matched: result.matchedCount,
+    changed: result.modifiedCount,
+    mode,
+  });
+}
+
+module.exports = { list, create, update, remove, transferContacts };

@@ -7,6 +7,7 @@ router.use(requireAuth);
 
 router.get('/', controller.list);
 router.post('/', controller.create);
+router.post('/:id/contacts/transfer', controller.transferContacts);
 router.put('/:id', controller.update);
 router.delete('/:id', controller.remove);
 

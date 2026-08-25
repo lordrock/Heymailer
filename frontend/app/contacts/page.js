@@ -227,6 +227,9 @@ export default function ContactsPage() {
           <div className="space-y-2 text-sm">
             <p className="text-emerald-700 font-semibold">{importResult.imported} contacts imported</p>
             <p className="text-ink-soft">{importResult.skippedDuplicates} duplicates skipped</p>
+            {importResult.updatedMemberships > 0 && (
+              <p className="text-ink-soft">{importResult.updatedMemberships} existing contacts added to the selected groups</p>
+            )}
             <p className="text-danger">{importResult.invalid} invalid rows</p>
             {importResult.errors?.length > 0 && (
               <ul className="text-xs text-ink-faint max-h-32 overflow-y-auto list-disc pl-4">

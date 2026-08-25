@@ -99,7 +99,7 @@ async function importCsv(req, res) {
 
   const groupIds = req.body.groupIds ? JSON.parse(req.body.groupIds) : [];
 
-  const results = { imported: 0, skippedDuplicates: 0, invalid: 0, errors: [] };
+  const results = { imported: 0, skippedDuplicates: 0, updatedMemberships: 0, invalid: 0, errors: [] };
   const existingEmails = new Set((await Contact.find({}).select('email')).map((c) => c.email));
 
   for (const [i, row] of records.entries()) {
@@ -111,6 +111,16 @@ async function importCsv(req, res) {
     }
     if (existingEmails.has(email)) {
       results.skippedDuplicates += 1;
+      if (groupIds.length) {
+        // Existing contacts are reused and attached to this import's groups;
+        // never create a second record for the same email address.
+        // eslint-disable-next-line no-await-in-loop
+        const updateResult = await Contact.updateOne(
+          { email },
+          { $addToSet: { groups: { $each: groupIds } } }
+        );
+        if (updateResult.modifiedCount) results.updatedMemberships += 1;
+      }
       continue;
     }
 
