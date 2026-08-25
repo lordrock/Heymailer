@@ -1,0 +1,25 @@
+{
+  "name": "roundtable-email-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoundTable email marketing and composer system",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently --names backend,frontend --prefix-colors blue,magenta \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "concurrently --names backend,frontend --prefix-colors blue,magenta \"npm run start --workspace=backend\" \"npm run start --workspace=frontend\"",
+    "seed": "npm run seed --workspace=backend",
+    "reset-admin-password": "npm run reset-admin-password --workspace=backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
