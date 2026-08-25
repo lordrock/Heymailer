@@ -8,6 +8,7 @@ router.use(requireAuth);
 router.get('/', controller.get);
 router.put('/', controller.update);
 router.delete('/smtp-password', controller.clearSmtpPassword);
+router.post('/test-provider', controller.testSmtp);
 router.post('/test-smtp', controller.testSmtp);
 router.post('/test-email', controller.sendTestEmail);
 

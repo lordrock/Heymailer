@@ -33,6 +33,16 @@ function validateProductionEnv() {
     errors.push('ADMIN_EMAIL and ADMIN_PASSWORD are required while AUTO_SEED is enabled');
   }
 
+  const mailProvider = String(process.env.MAIL_PROVIDER || 'smtp').toLowerCase();
+  if (!['smtp', 'mailjet'].includes(mailProvider)) {
+    errors.push('MAIL_PROVIDER must be smtp or mailjet');
+  }
+  if (mailProvider === 'mailjet') {
+    ['MAILJET_API_KEY', 'MAILJET_SECRET_KEY', 'MAILJET_FROM_EMAIL'].forEach((name) => {
+      if (!process.env[name]) errors.push(`${name} is required when MAIL_PROVIDER=mailjet`);
+    });
+  }
+
   if (errors.length) {
     throw new Error(`Production configuration invalid:\n- ${errors.join('\n- ')}`);
   }

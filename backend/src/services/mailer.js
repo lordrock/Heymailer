@@ -2,11 +2,53 @@ const nodemailer = require('nodemailer');
 const dns = require('dns').promises;
 const net = require('net');
 const tls = require('tls');
+const crypto = require('crypto');
 const Settings = require('../models/Settings');
 const { decryptSecret } = require('../utils/credentialCrypto');
 
 let cachedTransporter = null;
 let cachedKey = null;
+
+function getMailProvider() {
+  return String(process.env.MAIL_PROVIDER || 'smtp').trim().toLowerCase();
+}
+
+function mailjetCredentials() {
+  return {
+    apiKey: process.env.MAILJET_API_KEY || '',
+    secretKey: process.env.MAILJET_SECRET_KEY || '',
+  };
+}
+
+function mailjetAuthHeader() {
+  const { apiKey, secretKey } = mailjetCredentials();
+  if (!apiKey || !secretKey) {
+    throw Object.assign(new Error('Mailjet is not configured. Add MAILJET_API_KEY and MAILJET_SECRET_KEY.'), {
+      status: 400,
+    });
+  }
+  return `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString('base64')}`;
+}
+
+async function mailjetRequest(path, options = {}) {
+  const baseUrl = (process.env.MAILJET_API_BASE_URL || 'https://api.mailjet.com').replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      Authorization: mailjetAuthHeader(),
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = data.ErrorMessage || data.ErrorInfo || data.Message || `HTTP ${response.status}`;
+    throw Object.assign(new Error(`Mailjet: ${detail}`), { status: 400, providerStatus: response.status });
+  }
+  return data;
+}
 
 function getIpv4Socket(options, callback) {
   dns.resolve4(options.host)
@@ -47,7 +89,8 @@ async function getTransporter() {
   const secure = process.env.SMTP_SECURE === 'true';
   const forceIpv4 = process.env.SMTP_FORCE_IPV4 !== 'false';
 
-  const key = `${host}:${port}:${user}:${forceIpv4 ? 'ipv4' : 'auto'}`;
+  const passFingerprint = crypto.createHash('sha256').update(pass || '').digest('hex');
+  const key = `${host}:${port}:${user}:${passFingerprint}:${forceIpv4 ? 'ipv4' : 'auto'}`;
 
   if (cachedTransporter && cachedKey === key) {
     return cachedTransporter;
@@ -87,6 +130,10 @@ function invalidateTransporterCache() {
 }
 
 async function verifyConnection() {
+  if (getMailProvider() === 'mailjet') {
+    await mailjetRequest('/v3/REST/myprofile?Limit=1');
+    return true;
+  }
   const transporter = await getTransporter();
   await transporter.verify();
   return true;
@@ -94,10 +141,50 @@ async function verifyConnection() {
 
 async function sendEmail({ to, subject, html, text, fromName, replyTo }) {
   const settings = await Settings.findOne({ singleton: 'main' });
-  const transporter = await getTransporter();
+  const provider = getMailProvider();
+  const fromEmail = settings?.senderEmail
+    || (provider === 'mailjet' ? process.env.MAILJET_FROM_EMAIL : process.env.SMTP_FROM_EMAIL)
+    || process.env.SMTP_USER;
+  const senderName = fromName || settings?.senderName
+    || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : process.env.SMTP_FROM_NAME)
+    || 'RoundTable';
 
-  const fromEmail = settings?.senderEmail || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
-  const senderName = fromName || settings?.senderName || process.env.SMTP_FROM_NAME || 'RoundTable';
+  if (!fromEmail) {
+    throw Object.assign(new Error('Sender email is not configured.'), { status: 400 });
+  }
+
+  if (provider === 'mailjet') {
+    const data = await mailjetRequest('/v3.1/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        Messages: [{
+          From: { Email: fromEmail, Name: senderName },
+          To: [{ Email: to }],
+          ReplyTo: replyTo || settings?.replyTo
+            ? { Email: replyTo || settings.replyTo }
+            : undefined,
+          Subject: subject,
+          HTMLPart: html,
+          TextPart: text,
+        }],
+      }),
+    });
+    const result = data.Messages?.[0];
+    if (!result || result.Status !== 'success') {
+      throw Object.assign(new Error('Mailjet did not accept the email.'), { status: 400 });
+    }
+    return {
+      response: `Mailjet accepted (${result.To?.[0]?.MessageID || 'no message id'})`,
+      messageId: result.To?.[0]?.MessageUUID || result.To?.[0]?.MessageID,
+      provider: 'mailjet',
+    };
+  }
+
+  if (provider !== 'smtp') {
+    throw Object.assign(new Error(`Unsupported MAIL_PROVIDER: ${provider}`), { status: 400 });
+  }
+
+  const transporter = await getTransporter();
 
   const info = await transporter.sendMail({
     from: `"${senderName}" <${fromEmail}>`,
@@ -112,6 +199,7 @@ async function sendEmail({ to, subject, html, text, fromName, replyTo }) {
 }
 
 module.exports = {
+  getMailProvider,
   getTransporter,
   getSmtpCredentials,
   invalidateTransporterCache,

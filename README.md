@@ -1,10 +1,10 @@
 # RoundTable Email Marketing & Composer System
 
 An internal dashboard for the RoundTable team to compose branded HTML emails, manage
-reusable templates, personalise and send campaigns through Google SMTP, and track
+reusable templates, personalise and send campaigns through Mailjet's HTTPS API or Google SMTP, and track
 delivery — built as a **standalone** app that shares your existing MongoDB cluster.
 
-- **Backend:** Node.js / Express / MongoDB (Mongoose), JWT auth (single admin), Nodemailer + Google SMTP
+- **Backend:** Node.js / Express / MongoDB (Mongoose), JWT auth (single admin), Mailjet Send API + optional Nodemailer SMTP
 - **Frontend:** Next.js 14 (App Router) / TypeScript-ready / Tailwind CSS
 - **Queue:** In-app, MongoDB-backed batch sender (no Redis needed at RoundTable's volume — see note below)
 
@@ -51,7 +51,14 @@ Edit `.env`:
   admin login. Change the password after first login isn't built in yet — rotate it by
   re-running the seed script against a new email, or updating the hash directly if you
   need to change it later.
-- **SMTP_USER / SMTP_APP_PASSWORD** — a Gmail address with 2FA enabled, and an
+- **MAIL_PROVIDER / MAILJET_API_KEY / MAILJET_SECRET_KEY** — set `MAIL_PROVIDER=mailjet`
+  to send over HTTPS (recommended on Render Free, which blocks SMTP ports). Keep these
+  credentials only in the backend environment.
+- **MAILJET_FROM_EMAIL** — an active sender address verified in Mailjet. The dashboard
+  Sender Email should match it.
+- **MAILJET_API_BASE_URL** — normally `https://api.mailjet.com`; use
+  `https://api.us.mailjet.com` only for a Mailjet account hosted on US architecture.
+- **SMTP_USER / SMTP_APP_PASSWORD** — optional SMTP fallback: a Gmail address with 2FA enabled, and an
   [App Password](https://myaccount.google.com/apppasswords) (16 characters, not your
   normal Gmail password). You can also set/override these later from **Settings** in
   the dashboard.

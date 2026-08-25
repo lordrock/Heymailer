@@ -5,7 +5,7 @@ const EmailLog = require('../models/EmailLog');
 const Contact = require('../models/Contact');
 const Campaign = require('../models/Campaign');
 const Unsubscribe = require('../models/Unsubscribe');
-const { getSmtpCredentials } = require('./mailer');
+const { getMailProvider, getSmtpCredentials } = require('./mailer');
 
 const POLL_INTERVAL_MS = Number(process.env.BOUNCE_POLL_INTERVAL_MS) || 300000;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -162,6 +162,10 @@ async function checkMailbox() {
 }
 
 function startBounceProcessor() {
+  if (getMailProvider() !== 'smtp') {
+    console.log('[bounce] inbox processor disabled for API mail provider; use provider webhooks for delivery events');
+    return;
+  }
   if (pollHandle || process.env.BOUNCE_PROCESSING_ENABLED === 'false') return;
   setTimeout(checkMailbox, 5000);
   pollHandle = setInterval(checkMailbox, POLL_INTERVAL_MS);

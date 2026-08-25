@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [smtpPassword, setSmtpPassword] = useState('');
   const [envConfigured, setEnvConfigured] = useState(false);
+  const [mailProvider, setMailProvider] = useState('smtp');
   const [storedPasswordConfigured, setStoredPasswordConfigured] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [saving, setSaving] = useState(false);
@@ -21,6 +22,7 @@ export default function SettingsPage() {
 
   const load = () => api.get('/settings').then(({ data }) => {
     setSettings(data.settings);
+    setMailProvider(data.mailProvider || 'smtp');
     setEnvConfigured(data.envConfigured);
     setStoredPasswordConfigured(data.storedPasswordConfigured);
   });
@@ -45,11 +47,11 @@ export default function SettingsPage() {
     }
   };
 
-  const testSmtp = async () => {
+  const testProvider = async () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const { data } = await api.post('/settings/test-smtp');
+      const { data } = await api.post('/settings/test-provider');
       setTestResult(data);
     } catch (err) {
       setTestResult({ connected: false, message: errMsg(err) });
@@ -96,30 +98,41 @@ export default function SettingsPage() {
       <div className="max-w-2xl space-y-6">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-ink">Google SMTP</h3>
+            <h3 className="text-sm font-bold text-ink">{mailProvider === 'mailjet' ? 'Mailjet Email API' : 'Google SMTP'}</h3>
             <Badge tone={settings.smtpConnected ? 'success' : 'default'}>
               {settings.smtpConnected ? 'Connected' : 'Not Connected'}
             </Badge>
           </div>
           <p className="text-xs text-ink-soft mb-4">
-            {envConfigured
-              ? 'A default SMTP user/app password is configured via environment variables. You can override the app password here if needed.'
-              : 'No SMTP credentials found in environment variables — set them here or in the backend .env file.'}
+            {mailProvider === 'mailjet'
+              ? (envConfigured
+                ? 'Mailjet API credentials and a sender are configured securely on the backend.'
+                : 'Mailjet is selected but its API key, secret, or verified sender is missing from the backend environment.')
+              : (envConfigured
+                ? 'A default SMTP user/app password is configured via environment variables. You can override the app password here if needed.'
+                : 'No SMTP credentials found in environment variables — set them here or in the backend .env file.')}
           </p>
-          {storedPasswordConfigured && (
+          {mailProvider === 'smtp' && storedPasswordConfigured && (
             <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-4">
               An encrypted dashboard password is active and overrides the environment password.
             </p>
           )}
-          <div className="grid sm:grid-cols-2 gap-4 mb-4">
-            <Input label="SMTP User (Gmail address)" value={settings.smtpUser} onChange={(e) => update('smtpUser', e.target.value)} placeholder="notifications@roundtable.com" />
-            <Input label="App Password" type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="Leave blank to keep current" />
-          </div>
+          {mailProvider === 'smtp' && (
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <Input label="SMTP User (Gmail address)" value={settings.smtpUser} onChange={(e) => update('smtpUser', e.target.value)} placeholder="notifications@roundtable.com" />
+              <Input label="App Password" type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="Leave blank to keep current" />
+            </div>
+          )}
+          {mailProvider === 'mailjet' && (
+            <p className="text-xs text-ink-soft bg-surface-muted rounded-lg px-3 py-2 mb-4">
+              API credentials are managed in Render environment variables and are never exposed here. Sender Email below must be verified in Mailjet.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={testSmtp} disabled={testing}>
-              <PlugZap size={14} /> {testing ? 'Testing…' : 'Test SMTP Connection'}
+            <Button variant="secondary" size="sm" onClick={testProvider} disabled={testing}>
+              <PlugZap size={14} /> {testing ? 'Testing…' : `Test ${mailProvider === 'mailjet' ? 'Mailjet API' : 'SMTP Connection'}`}
             </Button>
-            {storedPasswordConfigured && (
+            {mailProvider === 'smtp' && storedPasswordConfigured && (
               <Button variant="ghost" size="sm" onClick={clearSavedPassword} disabled={clearingPassword}>
                 <Trash2 size={14} /> {clearingPassword ? 'Clearing…' : 'Clear Saved Password'}
               </Button>
@@ -176,7 +189,7 @@ export default function SettingsPage() {
             />
           </div>
           <p className="text-xs text-ink-soft mt-3">
-            These are the defaults used for new campaigns — helps respect Gmail&apos;s sending limits and keep deliverability healthy.
+            These defaults pace campaign delivery and help protect your sender reputation and provider limits.
           </p>
         </Card>
 

@@ -37,9 +37,9 @@ settingsSchema.statics.getSingleton = async function getSingleton() {
   if (!doc) {
     doc = await this.create({
       singleton: 'main',
-      senderName: process.env.SMTP_FROM_NAME || 'RoundTable',
-      senderEmail: process.env.SMTP_FROM_EMAIL || '',
-      replyTo: process.env.SMTP_FROM_EMAIL || '',
+      senderName: process.env.MAILJET_FROM_NAME || process.env.SMTP_FROM_NAME || 'RoundTable',
+      senderEmail: process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
+      replyTo: process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
       websiteUrl: process.env.WEBSITE_URL || '',
       savingsUrl: process.env.SAVINGS_URL || '',
       thriftUrl: process.env.THRIFT_URL || '',

@@ -1,6 +1,6 @@
 const Settings = require('../models/Settings');
 const EmailLog = require('../models/EmailLog');
-const { verifyConnection, invalidateTransporterCache, sendEmail } = require('../services/mailer');
+const { getMailProvider, verifyConnection, invalidateTransporterCache, sendEmail } = require('../services/mailer');
 const { encryptSecret, isEncrypted } = require('../utils/credentialCrypto');
 
 async function getSettingsWithSecret() {
@@ -24,9 +24,14 @@ function publicSettings(settings) {
 
 async function get(req, res) {
   const settings = await getSettingsWithSecret();
+  const mailProvider = getMailProvider();
+  const envConfigured = mailProvider === 'mailjet'
+    ? Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY && (settings.senderEmail || process.env.MAILJET_FROM_EMAIL))
+    : Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD);
   res.json({
     settings: publicSettings(settings),
-    envConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD),
+    mailProvider,
+    envConfigured,
     storedPasswordConfigured: Boolean(settings.smtpAppPasswordOverride),
   });
 }
@@ -70,12 +75,13 @@ async function clearSmtpPassword(req, res) {
 
 async function testSmtp(req, res) {
   const settings = await Settings.getSingleton();
+  const provider = getMailProvider();
   try {
     await verifyConnection();
     settings.smtpConnected = true;
     settings.smtpLastCheckedAt = new Date();
     await settings.save();
-    res.json({ connected: true, message: 'SMTP connection verified.' });
+    res.json({ connected: true, provider, message: `${provider === 'mailjet' ? 'Mailjet API' : 'SMTP'} configuration verified.` });
   } catch (err) {
     settings.smtpConnected = false;
     settings.smtpLastCheckedAt = new Date();
