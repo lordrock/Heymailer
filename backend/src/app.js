@@ -19,12 +19,23 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3100')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 app.set('trust proxy', 1);
 
 app.use(helmet({ contentSecurityPolicy: false })); // CSP off: we render admin-authored HTML email previews
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3100',
+    origin(origin, callback) {
+      // Requests without an Origin header are server-to-server or local tools.
+      if (!origin || allowedOrigins.includes(origin.replace(/\/+$/, ''))) {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin is not allowed by CORS.'));
+    },
     credentials: true,
   })
 );
