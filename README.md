@@ -58,6 +58,10 @@ Edit `.env`:
   Sender Email should match it.
 - **MAILJET_API_BASE_URL** — normally `https://api.mailjet.com`; use
   `https://api.us.mailjet.com` only for a Mailjet account hosted on US architecture.
+- **RESEND_API_KEY / RESEND_FROM_EMAIL / RESEND_FROM_NAME** — configure these to make
+  Resend available in the Settings provider selector. `RESEND_FROM_EMAIL` must use a
+  domain verified in Resend. API keys remain backend-only and are never returned to
+  the browser.
 - **SMTP_USER / SMTP_APP_PASSWORD** — optional SMTP fallback: a Gmail address with 2FA enabled, and an
   [App Password](https://myaccount.google.com/apppasswords) (16 characters, not your
   normal Gmail password). You can also set/override these later from **Settings** in

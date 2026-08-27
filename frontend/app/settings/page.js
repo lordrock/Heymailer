@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { Card, Button, Badge, Input } from '@/components/ui';
+import { Card, Button, Badge, Input, Select } from '@/components/ui';
 import api, { errMsg } from '@/lib/api';
 import { PlugZap, CheckCircle2, XCircle, Send, Trash2 } from 'lucide-react';
 
@@ -11,6 +11,8 @@ export default function SettingsPage() {
   const [smtpPassword, setSmtpPassword] = useState('');
   const [envConfigured, setEnvConfigured] = useState(false);
   const [mailProvider, setMailProvider] = useState('smtp');
+  const [activeProvider, setActiveProvider] = useState('smtp');
+  const [providerConfigurations, setProviderConfigurations] = useState({});
   const [storedPasswordConfigured, setStoredPasswordConfigured] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [saving, setSaving] = useState(false);
@@ -23,12 +25,21 @@ export default function SettingsPage() {
   const load = () => api.get('/settings').then(({ data }) => {
     setSettings(data.settings);
     setMailProvider(data.mailProvider || 'smtp');
+    setActiveProvider(data.mailProvider || 'smtp');
     setEnvConfigured(data.envConfigured);
+    setProviderConfigurations(data.providerConfigurations || {});
     setStoredPasswordConfigured(data.storedPasswordConfigured);
   });
   useEffect(() => { load(); }, []);
 
   const update = (field, val) => setSettings((s) => ({ ...s, [field]: val }));
+
+  const selectProvider = (provider) => {
+    setMailProvider(provider);
+    setEnvConfigured(Boolean(providerConfigurations[provider]));
+    setTestResult(null);
+    update('mailProvider', provider);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -98,17 +109,33 @@ export default function SettingsPage() {
       <div className="max-w-2xl space-y-6">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-ink">{mailProvider === 'mailjet' ? 'Mailjet Email API' : 'Google SMTP'}</h3>
+            <h3 className="text-sm font-bold text-ink">
+              {mailProvider === 'mailjet' ? 'Mailjet Email API' : mailProvider === 'resend' ? 'Resend Email API' : 'Google SMTP'}
+            </h3>
             <Badge tone={settings.smtpConnected ? 'success' : 'default'}>
               {settings.smtpConnected ? 'Connected' : 'Not Connected'}
             </Badge>
+          </div>
+          <div className="mb-4">
+            <Select label="Active Mail Provider" value={mailProvider} onChange={(e) => selectProvider(e.target.value)}>
+              <option value="mailjet">Mailjet API{providerConfigurations.mailjet ? ' — configured' : ''}</option>
+              <option value="resend">Resend API{providerConfigurations.resend ? ' — configured' : ''}</option>
+              <option value="smtp">Google SMTP{providerConfigurations.smtp ? ' — configured' : ''}</option>
+            </Select>
+            {activeProvider !== mailProvider && (
+              <p className="text-xs text-amber-700 mt-1.5">Save Settings to activate this provider.</p>
+            )}
           </div>
           <p className="text-xs text-ink-soft mb-4">
             {mailProvider === 'mailjet'
               ? (envConfigured
                 ? 'Mailjet API credentials and a sender are configured securely on the backend.'
                 : 'Mailjet is selected but its API key, secret, or verified sender is missing from the backend environment.')
-              : (envConfigured
+              : mailProvider === 'resend'
+                ? (envConfigured
+                  ? 'Resend API credentials and a verified-domain sender are configured securely on the backend.'
+                  : 'Resend is selected but its API key or sender email is missing from the backend environment.')
+                : (envConfigured
                 ? 'A default SMTP user/app password is configured via environment variables. You can override the app password here if needed.'
                 : 'No SMTP credentials found in environment variables — set them here or in the backend .env file.')}
           </p>
@@ -128,9 +155,14 @@ export default function SettingsPage() {
               API credentials are managed in Render environment variables and are never exposed here. Sender Email below must be verified in Mailjet.
             </p>
           )}
+          {mailProvider === 'resend' && (
+            <p className="text-xs text-ink-soft bg-surface-muted rounded-lg px-3 py-2 mb-4">
+              The API key is managed in Render and never exposed here. Sender Email below must use your verified Resend domain.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={testProvider} disabled={testing}>
-              <PlugZap size={14} /> {testing ? 'Testing…' : `Test ${mailProvider === 'mailjet' ? 'Mailjet API' : 'SMTP Connection'}`}
+            <Button variant="secondary" size="sm" onClick={testProvider} disabled={testing || activeProvider !== mailProvider}>
+              <PlugZap size={14} /> {testing ? 'Testing…' : `Test ${mailProvider === 'mailjet' ? 'Mailjet API' : mailProvider === 'resend' ? 'Resend API' : 'SMTP Connection'}`}
             </Button>
             {mailProvider === 'smtp' && storedPasswordConfigured && (
               <Button variant="ghost" size="sm" onClick={clearSavedPassword} disabled={clearingPassword}>
@@ -148,7 +180,7 @@ export default function SettingsPage() {
                 onChange={(e) => setTestRecipient(e.target.value)}
                 className="sm:w-72"
               />
-              <Button size="sm" onClick={sendTestEmail} disabled={sendingTest || !testRecipient}>
+              <Button size="sm" onClick={sendTestEmail} disabled={sendingTest || !testRecipient || activeProvider !== mailProvider}>
                 <Send size={14} /> {sendingTest ? 'Sending…' : 'Send Test Email'}
               </Button>
             </div>

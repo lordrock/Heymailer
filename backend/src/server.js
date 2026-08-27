@@ -21,7 +21,7 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`[server] RoundTable Email System API running on port ${PORT}`);
-    startBounceProcessor();
+    startBounceProcessor().catch((err) => console.error('[bounce] failed to start:', err.message));
   });
 }
 

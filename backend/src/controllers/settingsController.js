@@ -24,28 +24,35 @@ function publicSettings(settings) {
 
 async function get(req, res) {
   const settings = await getSettingsWithSecret();
-  const mailProvider = getMailProvider();
-  const envConfigured = mailProvider === 'mailjet'
-    ? Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY && (settings.senderEmail || process.env.MAILJET_FROM_EMAIL))
-    : Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD);
+  const mailProvider = getMailProvider(settings);
+  const providerConfigurations = {
+    mailjet: Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY && (settings.senderEmail || process.env.MAILJET_FROM_EMAIL)),
+    resend: Boolean(process.env.RESEND_API_KEY && (settings.senderEmail || process.env.RESEND_FROM_EMAIL)),
+    smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD),
+  };
   res.json({
     settings: publicSettings(settings),
     mailProvider,
-    envConfigured,
+    envConfigured: providerConfigurations[mailProvider],
+    providerConfigurations,
     storedPasswordConfigured: Boolean(settings.smtpAppPasswordOverride),
   });
 }
 
 async function update(req, res) {
   const settings = await Settings.getSingleton();
+  const previousProvider = settings.mailProvider;
   const fields = [
-    'senderName', 'senderEmail', 'replyTo',
+    'mailProvider', 'senderName', 'senderEmail', 'replyTo',
     'websiteUrl', 'savingsUrl', 'thriftUrl', 'telegramUrl', 'supportEmail',
     'smtpUser', 'batchSize', 'batchDelayMs',
   ];
   fields.forEach((f) => {
     if (req.body[f] !== undefined) settings[f] = req.body[f];
   });
+  if (req.body.mailProvider && req.body.mailProvider !== previousProvider) {
+    settings.smtpConnected = false;
+  }
 
   // Only overwrite the app password if the admin actually typed a new one —
   // never accept an empty string as "clear it" by accident.
@@ -75,13 +82,14 @@ async function clearSmtpPassword(req, res) {
 
 async function testSmtp(req, res) {
   const settings = await Settings.getSingleton();
-  const provider = getMailProvider();
+  const provider = getMailProvider(settings);
   try {
-    await verifyConnection();
+    await verifyConnection(settings);
     settings.smtpConnected = true;
     settings.smtpLastCheckedAt = new Date();
     await settings.save();
-    res.json({ connected: true, provider, message: `${provider === 'mailjet' ? 'Mailjet API' : 'SMTP'} configuration verified.` });
+    const label = provider === 'mailjet' ? 'Mailjet API' : provider === 'resend' ? 'Resend API' : 'SMTP';
+    res.json({ connected: true, provider, message: `${label} configuration verified.` });
   } catch (err) {
     settings.smtpConnected = false;
     settings.smtpLastCheckedAt = new Date();
@@ -97,10 +105,10 @@ async function sendTestEmail(req, res) {
   }
 
   const subject = 'RoundTable Mail — delivery test';
-  const text = 'Your RoundTable Mail SMTP configuration is working. This is a test email from the Settings dashboard.';
+  const text = 'Your RoundTable Mail provider configuration is working. This is a test email from the Settings dashboard.';
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#17362b">
-      <h1 style="font-size:22px">SMTP delivery test successful</h1>
+      <h1 style="font-size:22px">Email delivery test successful</h1>
       <p>Your RoundTable Mail configuration sent this message successfully.</p>
       <p style="color:#64748b;font-size:13px">Sent from the Settings dashboard.</p>
     </div>`;

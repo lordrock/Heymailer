@@ -5,6 +5,11 @@ const mongoose = require('mongoose');
 const settingsSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: 'main', unique: true },
+    mailProvider: {
+      type: String,
+      enum: ['mailjet', 'resend', 'smtp'],
+      default: () => String(process.env.MAIL_PROVIDER || 'mailjet').toLowerCase(),
+    },
 
     senderName: { type: String, default: 'RoundTable' },
     senderEmail: { type: String, default: '' },
@@ -37,9 +42,10 @@ settingsSchema.statics.getSingleton = async function getSingleton() {
   if (!doc) {
     doc = await this.create({
       singleton: 'main',
-      senderName: process.env.MAILJET_FROM_NAME || process.env.SMTP_FROM_NAME || 'RoundTable',
-      senderEmail: process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
-      replyTo: process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
+      mailProvider: String(process.env.MAIL_PROVIDER || 'mailjet').toLowerCase(),
+      senderName: process.env.RESEND_FROM_NAME || process.env.MAILJET_FROM_NAME || process.env.SMTP_FROM_NAME || 'RoundTable',
+      senderEmail: process.env.RESEND_FROM_EMAIL || process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
+      replyTo: process.env.RESEND_FROM_EMAIL || process.env.MAILJET_FROM_EMAIL || process.env.SMTP_FROM_EMAIL || '',
       websiteUrl: process.env.WEBSITE_URL || '',
       savingsUrl: process.env.SAVINGS_URL || '',
       thriftUrl: process.env.THRIFT_URL || '',

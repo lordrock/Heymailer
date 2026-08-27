@@ -9,8 +9,36 @@ const { decryptSecret } = require('../utils/credentialCrypto');
 let cachedTransporter = null;
 let cachedKey = null;
 
-function getMailProvider() {
-  return String(process.env.MAIL_PROVIDER || 'smtp').trim().toLowerCase();
+function getMailProvider(settings) {
+  return String(settings?.mailProvider || process.env.MAIL_PROVIDER || 'smtp').trim().toLowerCase();
+}
+
+function resendApiKey() {
+  const apiKey = process.env.RESEND_API_KEY || '';
+  if (!apiKey) {
+    throw Object.assign(new Error('Resend is not configured. Add RESEND_API_KEY.'), { status: 400 });
+  }
+  return apiKey;
+}
+
+async function resendRequest(path, options = {}) {
+  const response = await fetch(`https://api.resend.com${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${resendApiKey()}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'RoundTable-Mailer/1.0',
+      ...options.headers,
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = data.message || data.name || `HTTP ${response.status}`;
+    throw Object.assign(new Error(`Resend: ${detail}`), { status: 400, providerStatus: response.status });
+  }
+  return data;
 }
 
 function mailjetCredentials() {
@@ -129,9 +157,28 @@ function invalidateTransporterCache() {
   cachedKey = null;
 }
 
-async function verifyConnection() {
-  if (getMailProvider() === 'mailjet') {
+async function verifyConnection(providedSettings) {
+  const settings = providedSettings || await Settings.findOne({ singleton: 'main' });
+  const provider = getMailProvider(settings);
+  if (provider === 'mailjet') {
     await mailjetRequest('/v3/REST/myprofile?Limit=1');
+    return true;
+  }
+  if (provider === 'resend') {
+    const fromEmail = settings?.senderEmail || process.env.RESEND_FROM_EMAIL;
+    const senderName = settings?.senderName || process.env.RESEND_FROM_NAME || 'RoundTable';
+    if (!fromEmail) throw Object.assign(new Error('Resend sender email is not configured.'), { status: 400 });
+    const senderHash = crypto.createHash('sha256').update(fromEmail).digest('hex').slice(0, 16);
+    await resendRequest('/emails', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': `roundtable-provider-check-${senderHash}` },
+      body: JSON.stringify({
+        from: `${senderName} <${fromEmail}>`,
+        to: ['delivered@resend.dev'],
+        subject: 'RoundTable Resend configuration check',
+        text: 'Provider configuration check.',
+      }),
+    });
     return true;
   }
   const transporter = await getTransporter();
@@ -139,14 +186,16 @@ async function verifyConnection() {
   return true;
 }
 
-async function sendEmail({ to, subject, html, text, fromName, replyTo }) {
+async function sendEmail({ to, subject, html, text, fromName, replyTo, idempotencyKey }) {
   const settings = await Settings.findOne({ singleton: 'main' });
-  const provider = getMailProvider();
+  const provider = getMailProvider(settings);
   const fromEmail = settings?.senderEmail
-    || (provider === 'mailjet' ? process.env.MAILJET_FROM_EMAIL : process.env.SMTP_FROM_EMAIL)
+    || (provider === 'mailjet' ? process.env.MAILJET_FROM_EMAIL : null)
+    || (provider === 'resend' ? process.env.RESEND_FROM_EMAIL : process.env.SMTP_FROM_EMAIL)
     || process.env.SMTP_USER;
   const senderName = fromName || settings?.senderName
-    || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : process.env.SMTP_FROM_NAME)
+    || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : null)
+    || (provider === 'resend' ? process.env.RESEND_FROM_NAME : process.env.SMTP_FROM_NAME)
     || 'RoundTable';
 
   if (!fromEmail) {
@@ -177,6 +226,26 @@ async function sendEmail({ to, subject, html, text, fromName, replyTo }) {
       response: `Mailjet accepted (${result.To?.[0]?.MessageID || 'no message id'})`,
       messageId: result.To?.[0]?.MessageUUID || result.To?.[0]?.MessageID,
       provider: 'mailjet',
+    };
+  }
+
+  if (provider === 'resend') {
+    const data = await resendRequest('/emails', {
+      method: 'POST',
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+      body: JSON.stringify({
+        from: `${senderName} <${fromEmail}>`,
+        to: [to],
+        reply_to: replyTo || settings?.replyTo || fromEmail,
+        subject,
+        html,
+        text,
+      }),
+    });
+    return {
+      response: `Resend accepted (${data.id || 'no message id'})`,
+      messageId: data.id,
+      provider: 'resend',
     };
   }
 

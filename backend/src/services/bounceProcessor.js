@@ -96,11 +96,12 @@ async function checkMailbox() {
 
   let client;
   try {
-    const { user, pass } = await getSmtpCredentials();
-    if (!user || !pass) return;
-
     const settings = await Settings.findOne({ singleton: 'main' }).select('+bounceLastUid');
     if (!settings) return;
+    if (getMailProvider(settings) !== 'smtp') return;
+
+    const { user, pass } = await getSmtpCredentials();
+    if (!user || !pass) return;
 
     client = new ImapFlow({
       host: process.env.IMAP_HOST || 'imap.gmail.com',
@@ -161,8 +162,9 @@ async function checkMailbox() {
   }
 }
 
-function startBounceProcessor() {
-  if (getMailProvider() !== 'smtp') {
+async function startBounceProcessor() {
+  const settings = await Settings.findOne({ singleton: 'main' });
+  if (getMailProvider(settings) !== 'smtp') {
     console.log('[bounce] inbox processor disabled for API mail provider; use provider webhooks for delivery events');
     return;
   }

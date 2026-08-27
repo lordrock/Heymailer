@@ -95,6 +95,7 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
       text,
       fromName: campaign.senderName,
       replyTo: campaign.replyTo,
+      idempotencyKey: `roundtable-campaign-${campaign._id}-email-${log._id}`,
     });
 
     log.status = 'sent';
