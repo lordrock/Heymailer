@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const controller = require('../controllers/contactController');
 const { requireAuth } = require('../middleware/auth');
+const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -17,12 +18,12 @@ const upload = multer({
   },
 });
 
-router.get('/', controller.list);
-router.get('/unsubscribed', controller.unsubscribeList);
-router.get('/:id', controller.getOne);
-router.post('/', controller.create);
-router.put('/:id', controller.update);
-router.delete('/:id', controller.remove);
-router.post('/import', upload.single('file'), controller.importCsv);
+router.get('/', asyncHandler(controller.list));
+router.get('/unsubscribed', asyncHandler(controller.unsubscribeList));
+router.get('/:id', asyncHandler(controller.getOne));
+router.post('/', asyncHandler(controller.create));
+router.put('/:id', asyncHandler(controller.update));
+router.delete('/:id', asyncHandler(controller.remove));
+router.post('/import', upload.single('file'), asyncHandler(controller.importCsv));
 
 module.exports = router;

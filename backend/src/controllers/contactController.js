@@ -36,10 +36,21 @@ async function create(req, res) {
     return res.status(400).json({ message: 'A valid email address is required.' });
   }
 
+  const normalizedEmail = email.toLowerCase().trim();
+  const existing = await Contact.findOne({ email: normalizedEmail }).select('_id groups');
+  if (existing) {
+    return res.status(409).json({
+      message: `A contact with the email ${normalizedEmail} already exists. Edit the existing contact or add it to another group.`,
+      code: 'CONTACT_EMAIL_EXISTS',
+      field: 'email',
+      contactId: existing._id,
+    });
+  }
+
   const contact = await Contact.create({
     firstName,
     lastName,
-    email: email.toLowerCase().trim(),
+    email: normalizedEmail,
     tags,
     groups,
     customFields,
@@ -59,7 +70,17 @@ async function update(req, res) {
   if (lastName !== undefined) contact.lastName = lastName;
   if (email !== undefined) {
     if (!EMAIL_RE.test(email)) return res.status(400).json({ message: 'Invalid email address.' });
-    contact.email = email.toLowerCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await Contact.findOne({ email: normalizedEmail, _id: { $ne: contact._id } }).select('_id');
+    if (existing) {
+      return res.status(409).json({
+        message: `Another contact already uses ${normalizedEmail}.`,
+        code: 'CONTACT_EMAIL_EXISTS',
+        field: 'email',
+        contactId: existing._id,
+      });
+    }
+    contact.email = normalizedEmail;
   }
   if (tags !== undefined) contact.tags = tags;
   if (groups !== undefined) contact.groups = groups;

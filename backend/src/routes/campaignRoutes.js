@@ -1,19 +1,20 @@
 const express = require('express');
 const controller = require('../controllers/campaignController');
 const { requireAuth } = require('../middleware/auth');
+const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requireAuth);
 
-router.get('/', controller.list);
-router.get('/:id', controller.getOne);
-router.post('/', controller.create);
-router.put('/:id', controller.update);
-router.delete('/:id', controller.remove);
+router.get('/', asyncHandler(controller.list));
+router.get('/:id', asyncHandler(controller.getOne));
+router.post('/', asyncHandler(controller.create));
+router.put('/:id', asyncHandler(controller.update));
+router.delete('/:id', asyncHandler(controller.remove));
 
-router.post('/resolve-recipients', controller.resolveRecipientPreview);
-router.post('/send-test', controller.sendTest);
-router.post('/:id/send', controller.startSend);
-router.post('/:id/cancel', controller.cancelSend);
+router.post('/resolve-recipients', asyncHandler(controller.resolveRecipientPreview));
+router.post('/send-test', asyncHandler(controller.sendTest));
+router.post('/:id/send', asyncHandler(controller.startSend));
+router.post('/:id/cancel', asyncHandler(controller.cancelSend));
 
 module.exports = router;

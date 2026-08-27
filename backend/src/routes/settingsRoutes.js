@@ -1,15 +1,16 @@
 const express = require('express');
 const controller = require('../controllers/settingsController');
 const { requireAuth } = require('../middleware/auth');
+const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 router.use(requireAuth);
 
-router.get('/', controller.get);
-router.put('/', controller.update);
-router.delete('/smtp-password', controller.clearSmtpPassword);
-router.post('/test-provider', controller.testSmtp);
-router.post('/test-smtp', controller.testSmtp);
-router.post('/test-email', controller.sendTestEmail);
+router.get('/', asyncHandler(controller.get));
+router.put('/', asyncHandler(controller.update));
+router.delete('/smtp-password', asyncHandler(controller.clearSmtpPassword));
+router.post('/test-provider', asyncHandler(controller.testSmtp));
+router.post('/test-smtp', asyncHandler(controller.testSmtp));
+router.post('/test-email', asyncHandler(controller.sendTestEmail));
 
 module.exports = router;

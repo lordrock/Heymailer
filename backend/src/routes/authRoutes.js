@@ -4,6 +4,7 @@ const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const { requireAuth } = require('../middleware/auth');
 const validate = require('../middleware/validate');
+const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 
@@ -20,9 +21,9 @@ router.post(
   loginLimiter,
   [body('email').isEmail(), body('password').isString().notEmpty()],
   validate,
-  authController.login
+  asyncHandler(authController.login)
 );
-router.post('/logout', authController.logout);
-router.get('/me', requireAuth, authController.me);
+router.post('/logout', asyncHandler(authController.logout));
+router.get('/me', requireAuth, asyncHandler(authController.me));
 
 module.exports = router;
