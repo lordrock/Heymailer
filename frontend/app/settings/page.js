@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [mailProvider, setMailProvider] = useState('smtp');
   const [activeProvider, setActiveProvider] = useState('smtp');
   const [providerConfigurations, setProviderConfigurations] = useState({});
+  const [activeSenderEmail, setActiveSenderEmail] = useState('');
   const [storedPasswordConfigured, setStoredPasswordConfigured] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
   const [saving, setSaving] = useState(false);
@@ -28,6 +29,7 @@ export default function SettingsPage() {
     setActiveProvider(data.mailProvider || 'smtp');
     setEnvConfigured(data.envConfigured);
     setProviderConfigurations(data.providerConfigurations || {});
+    setActiveSenderEmail(data.activeSenderEmail || '');
     setStoredPasswordConfigured(data.storedPasswordConfigured);
   });
   useEffect(() => { load(); }, []);
@@ -139,6 +141,11 @@ export default function SettingsPage() {
                 ? 'A default SMTP user/app password is configured via environment variables. You can override the app password here if needed.'
                 : 'No SMTP credentials found in environment variables — set them here or in the backend .env file.')}
           </p>
+          {activeSenderEmail && (
+            <p className="text-xs text-emerald-800 bg-emerald-50 rounded-lg px-3 py-2 mb-4">
+              Active From address: <span className="font-semibold">{activeSenderEmail}</span>
+            </p>
+          )}
           {mailProvider === 'smtp' && storedPasswordConfigured && (
             <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-4">
               An encrypted dashboard password is active and overrides the environment password.
@@ -157,7 +164,7 @@ export default function SettingsPage() {
           )}
           {mailProvider === 'resend' && (
             <p className="text-xs text-ink-soft bg-surface-muted rounded-lg px-3 py-2 mb-4">
-              The API key is managed in Render and never exposed here. Sender Email below must use your verified Resend domain.
+              The API key and RESEND_FROM_EMAIL are managed in the Mailer backend on Render and never exposed here. RESEND_FROM_EMAIL takes priority over the general Sender Email below.
             </p>
           )}
           <div className="flex flex-wrap items-center gap-3">

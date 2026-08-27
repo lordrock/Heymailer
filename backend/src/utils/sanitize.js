@@ -6,7 +6,7 @@ const sanitizeHtml = require('sanitize-html');
 // in the admin's browser when previewed.
 const EMAIL_SAFE_OPTIONS = {
   allowedTags: [
-    'html', 'head', 'body', 'meta', 'title', 'style',
+    'html', 'head', 'body', 'meta', 'title',
     'div', 'span', 'p', 'a', 'img', 'br', 'hr',
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'ul', 'ol', 'li', 'strong', 'em', 'b', 'i', 'u',
@@ -21,7 +21,6 @@ const EMAIL_SAFE_OPTIONS = {
     table: ['cellpadding', 'cellspacing', 'border', 'role'],
   },
   allowedSchemes: ['http', 'https', 'mailto'],
-  allowVulnerableTags: false,
   allowedStyles: {
     '*': {
       color: [/.*/],

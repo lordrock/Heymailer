@@ -1,6 +1,6 @@
 const Settings = require('../models/Settings');
 const EmailLog = require('../models/EmailLog');
-const { getMailProvider, verifyConnection, invalidateTransporterCache, sendEmail } = require('../services/mailer');
+const { getMailProvider, getSenderEmail, verifyConnection, invalidateTransporterCache, sendEmail } = require('../services/mailer');
 const { encryptSecret, isEncrypted } = require('../utils/credentialCrypto');
 
 async function getSettingsWithSecret() {
@@ -25,14 +25,16 @@ function publicSettings(settings) {
 async function get(req, res) {
   const settings = await getSettingsWithSecret();
   const mailProvider = getMailProvider(settings);
+  const activeSenderEmail = getSenderEmail(mailProvider, settings);
   const providerConfigurations = {
-    mailjet: Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY && (settings.senderEmail || process.env.MAILJET_FROM_EMAIL)),
-    resend: Boolean(process.env.RESEND_API_KEY && (settings.senderEmail || process.env.RESEND_FROM_EMAIL)),
+    mailjet: Boolean(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY && getSenderEmail('mailjet', settings)),
+    resend: Boolean(process.env.RESEND_API_KEY && getSenderEmail('resend', settings)),
     smtp: Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD),
   };
   res.json({
     settings: publicSettings(settings),
     mailProvider,
+    activeSenderEmail,
     envConfigured: providerConfigurations[mailProvider],
     providerConfigurations,
     storedPasswordConfigured: Boolean(settings.smtpAppPasswordOverride),

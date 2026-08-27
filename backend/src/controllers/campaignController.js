@@ -135,7 +135,7 @@ async function sendTest(req, res) {
       isTest: true,
       errorMessage: err.message,
     });
-    res.status(500).json({ message: `Could not send test email: ${err.message}` });
+    res.status(err.status || 502).json({ message: `Could not send test email: ${err.message}` });
   }
 }
 

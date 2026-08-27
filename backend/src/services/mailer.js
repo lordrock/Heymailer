@@ -13,6 +13,12 @@ function getMailProvider(settings) {
   return String(settings?.mailProvider || process.env.MAIL_PROVIDER || 'smtp').trim().toLowerCase();
 }
 
+function getSenderEmail(provider, settings) {
+  if (provider === 'resend') return process.env.RESEND_FROM_EMAIL || settings?.senderEmail || '';
+  if (provider === 'mailjet') return process.env.MAILJET_FROM_EMAIL || settings?.senderEmail || '';
+  return settings?.senderEmail || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '';
+}
+
 function resendApiKey() {
   const apiKey = process.env.RESEND_API_KEY || '';
   if (!apiKey) {
@@ -165,7 +171,7 @@ async function verifyConnection(providedSettings) {
     return true;
   }
   if (provider === 'resend') {
-    const fromEmail = settings?.senderEmail || process.env.RESEND_FROM_EMAIL;
+    const fromEmail = getSenderEmail(provider, settings);
     const senderName = settings?.senderName || process.env.RESEND_FROM_NAME || 'RoundTable';
     if (!fromEmail) throw Object.assign(new Error('Resend sender email is not configured.'), { status: 400 });
     const senderHash = crypto.createHash('sha256').update(fromEmail).digest('hex').slice(0, 16);
@@ -189,10 +195,7 @@ async function verifyConnection(providedSettings) {
 async function sendEmail({ to, subject, html, text, fromName, replyTo, idempotencyKey }) {
   const settings = await Settings.findOne({ singleton: 'main' });
   const provider = getMailProvider(settings);
-  const fromEmail = settings?.senderEmail
-    || (provider === 'mailjet' ? process.env.MAILJET_FROM_EMAIL : null)
-    || (provider === 'resend' ? process.env.RESEND_FROM_EMAIL : process.env.SMTP_FROM_EMAIL)
-    || process.env.SMTP_USER;
+  const fromEmail = getSenderEmail(provider, settings);
   const senderName = fromName || settings?.senderName
     || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : null)
     || (provider === 'resend' ? process.env.RESEND_FROM_NAME : process.env.SMTP_FROM_NAME)
@@ -269,6 +272,7 @@ async function sendEmail({ to, subject, html, text, fromName, replyTo, idempoten
 
 module.exports = {
   getMailProvider,
+  getSenderEmail,
   getTransporter,
   getSmtpCredentials,
   invalidateTransporterCache,
