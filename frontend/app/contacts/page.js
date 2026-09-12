@@ -203,8 +203,8 @@ export default function ContactsPage() {
         {!importResult ? (
           <div className="space-y-4">
             <p className="text-xs text-ink-soft">
-              CSV should have columns: <code className="bg-surface px-1.5 py-0.5 rounded">firstName,lastName,email</code>.
-              Malformed emails are rejected and duplicates are skipped automatically.
+              CSV should contain <code className="bg-surface px-1.5 py-0.5 rounded">First Name, Last Name, Email</code> columns.
+              Common variations such as <code className="bg-surface px-1.5 py-0.5 rounded">firstName</code> and <code className="bg-surface px-1.5 py-0.5 rounded">Email Address</code> are accepted. Malformed emails are rejected and duplicates are reused automatically.
             </p>
             <input ref={fileRef} type="file" accept=".csv" onChange={(e) => setImportFile(e.target.files[0])} className="text-sm" />
             <div>

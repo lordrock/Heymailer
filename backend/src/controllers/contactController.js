@@ -4,6 +4,22 @@ const Unsubscribe = require('../models/Unsubscribe');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function normalizeCsvHeader(header) {
+  const cleaned = String(header || '').replace(/^\uFEFF/, '').trim();
+  const key = cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const aliases = {
+    firstname: 'firstName',
+    givenname: 'firstName',
+    lastname: 'lastName',
+    surname: 'lastName',
+    familyname: 'lastName',
+    email: 'email',
+    emailaddress: 'email',
+    mail: 'email',
+  };
+  return aliases[key] || cleaned;
+}
+
 async function list(req, res) {
   const { search, group, tag, status, page = 1, limit = 25 } = req.query;
   const filter = {};
@@ -99,8 +115,9 @@ async function remove(req, res) {
 }
 
 /**
- * CSV import. Expects a `firstName,lastName,email` header (extra columns are
- * ignored). Validates addresses, skips duplicates already in the DB, and
+ * CSV import. Accepts common Excel header styles such as `First Name`,
+ * `Last Name`, and `Email Address` (extra columns are ignored). Validates
+ * addresses, skips duplicates already in the DB, and
  * reports a per-row summary instead of failing the whole import on one bad
  * row.
  */
@@ -108,9 +125,13 @@ async function importCsv(req, res) {
   if (!req.file) return res.status(400).json({ message: 'No CSV file uploaded.' });
 
   let records;
+  let headers = [];
   try {
     records = parse(req.file.buffer.toString('utf-8'), {
-      columns: (header) => header.map((h) => h.trim()),
+      columns: (header) => {
+        headers = header.map(normalizeCsvHeader);
+        return headers;
+      },
       skip_empty_lines: true,
       trim: true,
     });
@@ -118,7 +139,19 @@ async function importCsv(req, res) {
     return res.status(400).json({ message: `Could not parse CSV: ${err.message}` });
   }
 
-  const groupIds = req.body.groupIds ? JSON.parse(req.body.groupIds) : [];
+  if (!headers.includes('email')) {
+    return res.status(400).json({
+      message: `No email column was found. Use a header such as Email or Email Address. Detected columns: ${headers.join(', ') || 'none'}.`,
+    });
+  }
+
+  let groupIds = [];
+  try {
+    groupIds = req.body.groupIds ? JSON.parse(req.body.groupIds) : [];
+    if (!Array.isArray(groupIds)) throw new Error('Group selection must be a list.');
+  } catch {
+    return res.status(400).json({ message: 'The selected contact groups are invalid. Please select them again.' });
+  }
 
   const results = { imported: 0, skippedDuplicates: 0, updatedMemberships: 0, invalid: 0, errors: [] };
   const existingEmails = new Set((await Contact.find({}).select('email')).map((c) => c.email));
