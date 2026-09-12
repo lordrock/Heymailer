@@ -8,6 +8,7 @@ const campaignSchema = new mongoose.Schema(
     subject: { type: String, required: true, trim: true },
     preheader: { type: String, trim: true, default: '' },
     senderName: { type: String, trim: true, default: 'RoundTable' },
+    senderEmail: { type: String, trim: true, lowercase: true, default: '' },
     replyTo: { type: String, trim: true },
 
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },
@@ -26,8 +27,10 @@ const campaignSchema = new mongoose.Schema(
 
     status: { type: String, enum: STATUSES, default: 'draft' },
 
-    batchSize: { type: Number, default: 5 },
-    batchDelayMs: { type: Number, default: 120000 },
+    // Snapshotted from Settings when the campaign is created so changing the
+    // global defaults cannot unexpectedly alter a campaign already in flight.
+    batchSize: { type: Number, min: 1, max: 1000, default: 5 },
+    batchDelayMs: { type: Number, min: 0, max: 86400000, default: 120000 },
 
     scheduledAt: { type: Date },
     startedAt: { type: Date },

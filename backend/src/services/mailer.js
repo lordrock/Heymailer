@@ -192,10 +192,10 @@ async function verifyConnection(providedSettings) {
   return true;
 }
 
-async function sendEmail({ to, subject, html, text, fromName, replyTo, idempotencyKey }) {
+async function sendEmail({ to, subject, html, text, fromName, fromEmail: requestedFromEmail, replyTo, idempotencyKey }) {
   const settings = await Settings.findOne({ singleton: 'main' });
   const provider = getMailProvider(settings);
-  const fromEmail = getSenderEmail(provider, settings);
+  const fromEmail = String(requestedFromEmail || getSenderEmail(provider, settings)).trim().toLowerCase();
   const senderName = fromName || settings?.senderName
     || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : null)
     || (provider === 'resend' ? process.env.RESEND_FROM_NAME : process.env.SMTP_FROM_NAME)

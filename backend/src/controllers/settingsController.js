@@ -47,11 +47,27 @@ async function update(req, res) {
   const fields = [
     'mailProvider', 'senderName', 'senderEmail', 'replyTo',
     'websiteUrl', 'savingsUrl', 'thriftUrl', 'telegramUrl', 'supportEmail',
-    'smtpUser', 'batchSize', 'batchDelayMs',
+    'smtpUser',
   ];
   fields.forEach((f) => {
     if (req.body[f] !== undefined) settings[f] = req.body[f];
   });
+
+  if (req.body.batchSize !== undefined) {
+    const batchSize = Number(req.body.batchSize);
+    if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) {
+      return res.status(400).json({ message: 'Batch size must be a whole number between 1 and 1000.' });
+    }
+    settings.batchSize = batchSize;
+  }
+
+  if (req.body.batchDelayMs !== undefined) {
+    const batchDelayMs = Number(req.body.batchDelayMs);
+    if (!Number.isInteger(batchDelayMs) || batchDelayMs < 0 || batchDelayMs > 86400000) {
+      return res.status(400).json({ message: 'Batch delay must be between 0 minutes and 24 hours.' });
+    }
+    settings.batchDelayMs = batchDelayMs;
+  }
   if (req.body.mailProvider && req.body.mailProvider !== previousProvider) {
     settings.smtpConnected = false;
   }

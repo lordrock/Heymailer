@@ -31,8 +31,8 @@ const settingsSchema = new mongoose.Schema(
     bounceLastCheckedAt: { type: Date },
     bounceLastError: { type: String, default: '' },
 
-    batchSize: { type: Number, default: 5 },
-    batchDelayMs: { type: Number, default: 120000 },
+    batchSize: { type: Number, min: 1, max: 1000, default: 5 },
+    batchDelayMs: { type: Number, min: 0, max: 86400000, default: 120000 },
   },
   { timestamps: true, collection: 'mail_settings' }
 );

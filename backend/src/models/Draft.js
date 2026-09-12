@@ -6,6 +6,7 @@ const draftSchema = new mongoose.Schema(
     subject: { type: String, trim: true, default: '' },
     preheader: { type: String, trim: true, default: '' },
     senderName: { type: String, trim: true, default: 'RoundTable' },
+    senderEmail: { type: String, trim: true, lowercase: true, default: '' },
     replyTo: { type: String, trim: true, default: '' },
 
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailTemplate' },

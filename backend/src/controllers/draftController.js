@@ -19,6 +19,7 @@ async function upsert(req, res) {
     subject: body.subject || '',
     preheader: body.preheader || '',
     senderName: body.senderName || 'RoundTable',
+    senderEmail: body.senderEmail || '',
     replyTo: body.replyTo || '',
     templateId: body.templateId || undefined,
     htmlContent: sanitizeEmailHtml(body.htmlContent || ''),

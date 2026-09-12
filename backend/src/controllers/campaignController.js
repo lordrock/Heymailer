@@ -8,6 +8,8 @@ const { resolveVariables } = require('../services/templateEngine');
 const { sendEmail } = require('../services/mailer');
 const queue = require('../services/queue');
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 async function list(req, res) {
   const { status } = req.query;
   const filter = {};
@@ -47,12 +49,30 @@ async function resolveRecipientPreview(req, res) {
 
 async function create(req, res) {
   const body = req.body;
+  const settings = await Settings.getSingleton();
+
+  if (body.senderEmail && !EMAIL_PATTERN.test(String(body.senderEmail).trim())) {
+    return res.status(400).json({ message: 'Enter a valid sender email address.' });
+  }
+  if (body.replyTo && !EMAIL_PATTERN.test(String(body.replyTo).trim())) {
+    return res.status(400).json({ message: 'Enter a valid reply-to email address.' });
+  }
+
+  const batchSize = body.batchSize === undefined ? settings.batchSize : Number(body.batchSize);
+  const batchDelayMs = body.batchDelayMs === undefined ? settings.batchDelayMs : Number(body.batchDelayMs);
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) {
+    return res.status(400).json({ message: 'Batch size must be a whole number between 1 and 1000.' });
+  }
+  if (!Number.isInteger(batchDelayMs) || batchDelayMs < 0 || batchDelayMs > 86400000) {
+    return res.status(400).json({ message: 'Batch delay must be between 0 minutes and 24 hours.' });
+  }
 
   const campaign = await Campaign.create({
     name: body.name,
     subject: body.subject,
     preheader: body.preheader,
     senderName: body.senderName,
+    senderEmail: body.senderEmail || settings.senderEmail,
     replyTo: body.replyTo,
     templateId: body.templateId || undefined,
     htmlContent: sanitizeEmailHtml(body.htmlContent),
@@ -60,8 +80,8 @@ async function create(req, res) {
     recipientType: body.recipientType || 'group',
     contactIds: body.contactIds || [],
     groupIds: body.groupIds || [],
-    batchSize: body.batchSize || undefined,
-    batchDelayMs: body.batchDelayMs || undefined,
+    batchSize,
+    batchDelayMs,
     status: 'draft',
     createdBy: req.admin._id,
   });
@@ -76,8 +96,30 @@ async function update(req, res) {
     return res.status(400).json({ message: `Cannot edit a campaign that is already ${campaign.status}.` });
   }
 
+  if (req.body.senderEmail && !EMAIL_PATTERN.test(String(req.body.senderEmail).trim())) {
+    return res.status(400).json({ message: 'Enter a valid sender email address.' });
+  }
+  if (req.body.replyTo && !EMAIL_PATTERN.test(String(req.body.replyTo).trim())) {
+    return res.status(400).json({ message: 'Enter a valid reply-to email address.' });
+  }
+
+  if (req.body.batchSize !== undefined) {
+    const batchSize = Number(req.body.batchSize);
+    if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 1000) {
+      return res.status(400).json({ message: 'Batch size must be a whole number between 1 and 1000.' });
+    }
+    req.body.batchSize = batchSize;
+  }
+  if (req.body.batchDelayMs !== undefined) {
+    const batchDelayMs = Number(req.body.batchDelayMs);
+    if (!Number.isInteger(batchDelayMs) || batchDelayMs < 0 || batchDelayMs > 86400000) {
+      return res.status(400).json({ message: 'Batch delay must be between 0 minutes and 24 hours.' });
+    }
+    req.body.batchDelayMs = batchDelayMs;
+  }
+
   const fields = [
-    'name', 'subject', 'preheader', 'senderName', 'replyTo', 'templateId',
+    'name', 'subject', 'preheader', 'senderName', 'senderEmail', 'replyTo', 'templateId',
     'recipientType', 'contactIds', 'groupIds', 'batchSize', 'batchDelayMs',
   ];
   fields.forEach((f) => {
@@ -102,8 +144,14 @@ async function remove(req, res) {
 }
 
 async function sendTest(req, res) {
-  const { testEmail, htmlContent, textContent, subject } = req.body;
+  const { testEmail, htmlContent, textContent, subject, senderName, senderEmail, replyTo } = req.body;
   if (!testEmail) return res.status(400).json({ message: 'A test recipient email is required.' });
+  if (senderEmail && !EMAIL_PATTERN.test(String(senderEmail).trim())) {
+    return res.status(400).json({ message: 'Enter a valid sender email address.' });
+  }
+  if (replyTo && !EMAIL_PATTERN.test(String(replyTo).trim())) {
+    return res.status(400).json({ message: 'Enter a valid reply-to email address.' });
+  }
 
   const settings = await Settings.getSingleton();
   const baseUrl = process.env.SERVER_BASE_URL || `http://localhost:${process.env.PORT || 5100}`;
@@ -118,7 +166,15 @@ async function sendTest(req, res) {
   const resolvedSubject = resolveVariables(`[TEST] ${subject || ''}`, { contact: fakeContact, settings, baseUrl });
 
   try {
-    await sendEmail({ to: testEmail, subject: resolvedSubject, html, text });
+    await sendEmail({
+      to: testEmail,
+      subject: resolvedSubject,
+      html,
+      text,
+      fromName: senderName,
+      fromEmail: senderEmail,
+      replyTo,
+    });
     await EmailLog.create({
       recipientEmail: testEmail,
       subject: resolvedSubject,

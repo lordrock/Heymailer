@@ -94,6 +94,7 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
       html,
       text,
       fromName: campaign.senderName,
+      fromEmail: campaign.senderEmail,
       replyTo: campaign.replyTo,
       idempotencyKey: `roundtable-campaign-${campaign._id}-email-${log._id}`,
     });
@@ -118,7 +119,7 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
 }
 
 async function processCampaignBatch(campaign, settings, baseUrl) {
-  const batchSize = campaign.batchSize || 5;
+  const batchSize = campaign.batchSize ?? settings.batchSize ?? 5;
   const logs = await EmailLog.find({ campaignId: campaign._id, status: 'pending' })
     .limit(batchSize);
 
@@ -149,7 +150,7 @@ async function tick() {
     const baseUrl = process.env.SERVER_BASE_URL || `http://localhost:${process.env.PORT || 5100}`;
 
     for (const campaign of sendingCampaigns) {
-      const delay = campaign.batchDelayMs || 0;
+      const delay = campaign.batchDelayMs ?? settings.batchDelayMs ?? 0;
       const dueForNextBatch =
         !campaign.lastBatchAt || Date.now() - new Date(campaign.lastBatchAt).getTime() >= delay;
 

@@ -49,10 +49,11 @@ export default function SettingsPage() {
     try {
       const payload = { ...settings };
       if (smtpPassword) payload.smtpAppPassword = smtpPassword;
-      await api.put('/settings', payload);
+      const { data } = await api.put('/settings', payload);
+      setSettings(data.settings);
       setSmtpPassword('');
       setSaved(true);
-      load();
+      await load();
     } catch (err) {
       alert(errMsg(err));
     } finally {
@@ -218,11 +219,13 @@ export default function SettingsPage() {
         <Card className="p-6">
           <h3 className="text-sm font-bold text-ink mb-4">Sending Queue</h3>
           <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Batch Size" type="number" min={1} value={settings.batchSize} onChange={(e) => update('batchSize', Number(e.target.value))} />
+            <Input label="Batch Size" type="number" min={1} max={1000} step={1} value={settings.batchSize} onChange={(e) => update('batchSize', Number(e.target.value))} />
             <Input
               label="Delay Between Batches (minutes)"
               type="number"
               min={0}
+              max={1440}
+              step={1}
               value={Math.round(settings.batchDelayMs / 60000)}
               onChange={(e) => update('batchDelayMs', Number(e.target.value) * 60000)}
             />
@@ -234,7 +237,11 @@ export default function SettingsPage() {
 
         <div className="flex items-center gap-3">
           <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</Button>
-          {saved && <span className="text-xs text-emerald-700 font-semibold">Saved.</span>}
+          {saved && (
+            <span className="text-xs text-emerald-700 font-semibold">
+              Saved: {settings.batchSize} per batch, {Math.round(settings.batchDelayMs / 60000)} minute delay.
+            </span>
+          )}
         </div>
       </div>
     </AppShell>

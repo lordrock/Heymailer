@@ -10,7 +10,7 @@ import api, { errMsg } from '@/lib/api';
 import { Send, Save, FileStack, ChevronRight, Users, UsersRound, X, MailCheck } from 'lucide-react';
 
 const emptyCampaign = {
-  name: '', subject: '', preheader: '', senderName: 'RoundTable', replyTo: '',
+  name: '', subject: '', preheader: '', senderName: 'RoundTable', senderEmail: '', replyTo: '',
   templateId: '', htmlContent: '<p>Hi {{firstName}},</p>', textContent: 'Hi {{firstName}},',
   recipientType: 'group', contactIds: [], groupIds: [],
 };
@@ -39,6 +39,16 @@ function ComposeInner() {
     api.get('/templates').then((res) => setTemplates(res.data.templates));
     api.get('/contact-groups').then((res) => setGroups(res.data.groups));
     api.get('/public/variables').then((res) => setVariables(res.data.variables));
+    if (!draftId) {
+      api.get('/settings').then(({ data }) => {
+        setCampaign((current) => ({
+          ...current,
+          senderName: data.settings.senderName || current.senderName,
+          senderEmail: data.activeSenderEmail || data.settings.senderEmail || '',
+          replyTo: data.settings.replyTo || '',
+        }));
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -52,6 +62,7 @@ function ComposeInner() {
         const d = data.draft;
         setCampaign({
           name: d.name, subject: d.subject, preheader: d.preheader, senderName: d.senderName,
+          senderEmail: d.senderEmail || '',
           replyTo: d.replyTo, templateId: d.templateId || '', htmlContent: d.htmlContent,
           textContent: d.textContent, recipientType: d.recipientType, contactIds: d.contactIds || [],
           groupIds: d.groupIds || [],
@@ -149,6 +160,7 @@ function ComposeInner() {
     try {
       await api.post('/campaigns/send-test', {
         testEmail, subject: campaign.subject, htmlContent: campaign.htmlContent, textContent: campaign.textContent,
+        senderName: campaign.senderName, senderEmail: campaign.senderEmail, replyTo: campaign.replyTo,
       });
       setTestStatus('sent');
     } catch (err) {
@@ -160,6 +172,7 @@ function ComposeInner() {
   const validate = () => {
     if (!campaign.name.trim()) return 'Give this campaign a name.';
     if (!campaign.subject.trim()) return 'A subject line is required.';
+    if (!campaign.senderEmail.trim()) return 'A sender email is required.';
     if (campaign.groupIds.length === 0 && campaign.contactIds.length === 0) return 'Select at least one contact or group.';
     return null;
   };
@@ -208,6 +221,8 @@ function ComposeInner() {
                 ['Campaign', campaign.name],
                 ['Subject', campaign.subject],
                 ['Sender', campaign.senderName || 'RoundTable'],
+                ['Sender Email', campaign.senderEmail],
+                ['Reply-To', campaign.replyTo || campaign.senderEmail],
                 ['Recipients', `${recipientPreview?.eligibleCount ?? 0} eligible${recipientPreview?.excludedCount ? ` (${recipientPreview.excludedCount} excluded — unsubscribed/inactive)` : ''}`],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between border-b border-surface-line pb-3">
@@ -257,6 +272,7 @@ function ComposeInner() {
               </Select>
               <Input label="Sender Name" value={campaign.senderName} onChange={(e) => update('senderName', e.target.value)} />
             </div>
+            <Input label="Sender Email" type="email" value={campaign.senderEmail} onChange={(e) => update('senderEmail', e.target.value)} placeholder="mailer@your-verified-domain.com" />
             <Input label="Subject" value={campaign.subject} onChange={(e) => update('subject', e.target.value)} placeholder="What if your savings could do more?" />
             <Input label="Preheader Text" value={campaign.preheader} onChange={(e) => update('preheader', e.target.value)} placeholder="Shown after the subject line in most inboxes" />
             <Input label="Reply-To Email" type="email" value={campaign.replyTo} onChange={(e) => update('replyTo', e.target.value)} placeholder="support@roundtable.example.com" />
