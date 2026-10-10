@@ -1,5 +1,5 @@
 /**
- * Shared RoundTable email shell. Every seed template renders its body
+ * Shared HeyMailer email shell. Every seed template renders its body
  * through this so all starter templates share one consistent, table-based
  * (Outlook-safe) layout using the brand palette defined in the PRD.
  */
@@ -9,7 +9,7 @@ function wrapEmail({ preheader = '', bodyHtml }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RoundTable</title>
+<title>HeyMailer</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F4F7F5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
@@ -19,7 +19,7 @@ function wrapEmail({ preheader = '', bodyHtml }) {
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#FFFFFF;border-radius:16px;overflow:hidden;">
           <tr>
             <td style="background-color:#073D2D;padding:28px 32px;">
-              <span style="color:#FFFFFF;font-size:18px;font-weight:700;letter-spacing:0.3px;">RoundTable</span>
+              <span style="color:#FFFFFF;font-size:18px;font-weight:700;letter-spacing:0.3px;">HeyMailer</span>
             </td>
           </tr>
           <tr>
@@ -37,7 +37,7 @@ function wrapEmail({ preheader = '', bodyHtml }) {
                 <a href="mailto:{{supportEmail}}" style="color:#0B7A53;text-decoration:none;font-weight:600;">{{supportEmail}}</a>
               </p>
               <p style="margin:0;font-size:11px;color:#98A29C;line-height:1.6;">
-                You're receiving this because you engaged with RoundTable Savings & Thrift.
+                You're receiving this because you engaged with HeyMailer Savings & Thrift.
                 <a href="{{unsubscribeUrl}}" style="color:#98A29C;text-decoration:underline;">Unsubscribe</a>
               </p>
             </td>

@@ -11,7 +11,7 @@ const bodyHtml = `
     Hi {{firstName}},
   </p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
-    RoundTable Thrift brings the rotating-savings model you already trust — Ajo, esusu,
+    HeyMailer Thrift brings the rotating-savings model you already trust — Ajo, esusu,
     adashi — into a simple, transparent digital format. You contribute on an agreed
     schedule, and you receive your payout according to your position in the circle.
   </p>
@@ -27,7 +27,7 @@ const bodyHtml = `
   </ul>
   ${button('Explore Available Thrifts', '{{thriftUrl}}')}
   <br>
-  ${secondaryButton('Talk to RoundTable Support', '{{telegramUrl}}')}
+  ${secondaryButton('Talk to HeyMailer Support', '{{telegramUrl}}')}
   ${divider()}
   <p style="margin:0;font-size:13px;line-height:1.6;color:#98A29C;">
     Every contribution, position, and payout is tracked transparently so you always
@@ -36,17 +36,17 @@ const bodyHtml = `
 `;
 
 module.exports = {
-  name: 'RoundTable Thrift Invitation',
+  name: 'HeyMailer Thrift Invitation',
   category: 'Thrift',
   subject: 'A savings structure that makes postponing harder',
   preheader,
-  description: 'Marketing invitation introducing the RoundTable rotational thrift/Ajo product.',
+  description: 'Marketing invitation introducing the HeyMailer rotational thrift/Ajo product.',
   htmlContent: wrapEmail({ preheader, bodyHtml }),
   textContent: `Hi {{firstName}},
 
 Some people don't have a problem earning money. They simply need a structure that makes saving harder to postpone.
 
-RoundTable Thrift brings the rotating-savings model you already trust — Ajo, esusu, adashi — into a simple, transparent digital format.
+HeyMailer Thrift brings the rotating-savings model you already trust — Ajo, esusu, adashi — into a simple, transparent digital format.
 
 How it works:
 - Join a thrift circle with an agreed contribution amount
@@ -55,9 +55,9 @@ How it works:
 - Receive your payout on your scheduled date
 
 Explore available thrifts: {{thriftUrl}}
-Talk to RoundTable Support: {{telegramUrl}}
+Talk to HeyMailer Support: {{telegramUrl}}
 
-RoundTable
+HeyMailer
 {{websiteUrl}}
 
 To stop receiving marketing emails: {{unsubscribeUrl}}`,

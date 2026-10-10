@@ -45,8 +45,9 @@ export function Badge({ tone = 'default', children }) {
 export function statusTone(status) {
   const map = {
     sent: 'success', completed: 'success', active: 'success', connected: 'success',
-    pending: 'warning', sending: 'warning', scheduled: 'warning',
-    failed: 'danger', cancelled: 'danger', unsubscribed: 'danger', bounced: 'danger', complained: 'danger',
+    pending: 'warning', submitted: 'warning', awaiting_payment: 'warning', sending: 'warning', scheduled: 'warning', past_due: 'warning',
+    paid: 'success', approved: 'success',
+    failed: 'danger', rejected: 'danger', expired: 'danger', cancelled: 'danger', unsubscribed: 'danger', bounced: 'danger', complained: 'danger',
     draft: 'default', 'not connected': 'default',
   };
   return map[String(status).toLowerCase()] || 'default';

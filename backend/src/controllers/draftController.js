@@ -18,7 +18,7 @@ async function upsert(req, res) {
     name: body.name || 'Untitled Draft',
     subject: body.subject || '',
     preheader: body.preheader || '',
-    senderName: body.senderName || 'RoundTable',
+    senderName: body.senderName || 'HeyMailer',
     senderEmail: body.senderEmail || '',
     replyTo: body.replyTo || '',
     templateId: body.templateId || undefined,

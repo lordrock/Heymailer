@@ -1,249 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
-import { Card, Button, Badge, Input, Select } from '@/components/ui';
+import { Badge, Button, Card, Input, Spinner } from '@/components/ui';
 import api, { errMsg } from '@/lib/api';
-import { PlugZap, CheckCircle2, XCircle, Send, Trash2 } from 'lucide-react';
+import { CheckCircle2, Globe2, LockKeyhole, MailCheck, Send, ShieldAlert, XCircle } from 'lucide-react';
+
+const statusTone = (status) => status === 'verified' ? 'success' : status === 'failed' ? 'danger' : 'warning';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
-  const [smtpPassword, setSmtpPassword] = useState('');
-  const [envConfigured, setEnvConfigured] = useState(false);
-  const [mailProvider, setMailProvider] = useState('smtp');
-  const [activeProvider, setActiveProvider] = useState('smtp');
-  const [providerConfigurations, setProviderConfigurations] = useState({});
-  const [activeSenderEmail, setActiveSenderEmail] = useState('');
-  const [storedPasswordConfigured, setStoredPasswordConfigured] = useState(false);
   const [testRecipient, setTestRecipient] = useState('');
+  const [result, setResult] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
-  const [clearingPassword, setClearingPassword] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-  const [saved, setSaved] = useState(false);
+  const load = useCallback(() => api.get('/settings').then(({ data }) => setSettings(data.settings)), []);
+  useEffect(() => { load(); }, [load]);
+  const update = (field, value) => setSettings((current) => ({ ...current, [field]: value }));
+  const save = async () => { setSaving(true); setResult(null); try { const { data } = await api.put('/settings', settings); setSettings(data.settings); setResult({ ok: true, message: 'Workspace preferences saved.' }); } catch (err) { setResult({ ok: false, message: errMsg(err) }); } finally { setSaving(false); } };
+  const sendTest = async () => { setSaving(true); setResult(null); try { const { data } = await api.post('/settings/test-email', { recipient: testRecipient }); setResult({ ok: true, message: data.message }); } catch (err) { setResult({ ok: false, message: errMsg(err) }); } finally { setSaving(false); } };
+  if (!settings) return <AppShell title="Settings"><div className="flex justify-center py-24"><Spinner size={28}/></div></AppShell>;
 
-  const load = () => api.get('/settings').then(({ data }) => {
-    setSettings(data.settings);
-    setMailProvider(data.mailProvider || 'smtp');
-    setActiveProvider(data.mailProvider || 'smtp');
-    setEnvConfigured(data.envConfigured);
-    setProviderConfigurations(data.providerConfigurations || {});
-    setActiveSenderEmail(data.activeSenderEmail || '');
-    setStoredPasswordConfigured(data.storedPasswordConfigured);
-  });
-  useEffect(() => { load(); }, []);
+  return <AppShell title="Workspace Settings"><div className="max-w-3xl space-y-6">
+    <Card className={`p-6 border-l-4 ${settings.sendingEnabled ? 'border-l-emerald-600' : 'border-l-amber'}`}>
+      <div className="flex items-start justify-between gap-4"><div className="flex gap-3"><div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings.sendingEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-bg text-amber'}`}>{settings.sendingEnabled ? <MailCheck size={20}/> : <ShieldAlert size={20}/>}</div><div><h2 className="font-bold text-ink">Sending identity</h2><p className="text-xs text-ink-soft mt-1">Managed and verified by HeyMailer administrators.</p></div></div><Badge tone={settings.sendingEnabled ? 'success' : 'warning'}>{settings.sendingEnabled ? 'Sending enabled' : 'Setup required'}</Badge></div>
+      <div className="grid sm:grid-cols-2 gap-3 mt-5"><Info label="Provider" value={settings.mailProvider?.toUpperCase()} icon={LockKeyhole}/><Info label="Verified domain" value={settings.sendingDomain || 'Not configured'} icon={Globe2}/><Info label="From email" value={settings.senderEmail || 'Not configured'} icon={MailCheck}/><Info label="Reply-To email" value={settings.replyTo || 'Not configured'} icon={Send}/><Info label="Unsubscribe URL" value={settings.unsubscribeEndpoint || 'Uses HeyMailer default'} icon={ShieldAlert}/></div>
+      <div className="flex flex-wrap gap-2 mt-4">{[['Domain',settings.domainStatus],['SPF',settings.spfStatus],['DKIM',settings.dkimStatus],['DMARC',settings.dmarcStatus]].map(([label,status]) => <Badge key={label} tone={statusTone(status)}>{label}: {status?.replace('_',' ')}</Badge>)}</div>
+      {!settings.sendingEnabled && <p className="text-xs text-amber bg-amber-bg rounded-lg px-3 py-2.5 mt-4">Campaign sending stays locked until your provider credentials, domain, SPF and DKIM are verified.</p>}
+      {settings.sendingEnabled && <div className="mt-5 pt-5 border-t border-surface-line"><p className="text-xs font-semibold text-ink-soft mb-2">Send a deliverability test</p><div className="flex flex-col sm:flex-row gap-2"><Input type="email" value={testRecipient} onChange={(e) => setTestRecipient(e.target.value)} placeholder="recipient@example.com" className="sm:w-72"/><Button onClick={sendTest} disabled={saving || !testRecipient}><Send size={14}/>{saving ? 'Sending…' : 'Send test'}</Button></div></div>}
+    </Card>
 
-  const update = (field, val) => setSettings((s) => ({ ...s, [field]: val }));
-
-  const selectProvider = (provider) => {
-    setMailProvider(provider);
-    setEnvConfigured(Boolean(providerConfigurations[provider]));
-    setTestResult(null);
-    update('mailProvider', provider);
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setSaved(false);
-    try {
-      const payload = { ...settings };
-      if (smtpPassword) payload.smtpAppPassword = smtpPassword;
-      const { data } = await api.put('/settings', payload);
-      setSettings(data.settings);
-      setSmtpPassword('');
-      setSaved(true);
-      await load();
-    } catch (err) {
-      alert(errMsg(err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const testProvider = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const { data } = await api.post('/settings/test-provider');
-      setTestResult(data);
-    } catch (err) {
-      setTestResult({ connected: false, message: errMsg(err) });
-    } finally {
-      setTesting(false);
-      load();
-    }
-  };
-
-  const sendTestEmail = async () => {
-    setSendingTest(true);
-    setTestResult(null);
-    try {
-      const { data } = await api.post('/settings/test-email', { recipient: testRecipient });
-      setTestResult({ connected: true, message: data.message });
-    } catch (err) {
-      setTestResult({ connected: false, message: errMsg(err) });
-    } finally {
-      setSendingTest(false);
-      load();
-    }
-  };
-
-  const clearSavedPassword = async () => {
-    if (!window.confirm('Clear the SMTP password saved in the dashboard?')) return;
-    setClearingPassword(true);
-    setTestResult(null);
-    try {
-      const { data } = await api.delete('/settings/smtp-password');
-      setSmtpPassword('');
-      setTestResult({ connected: true, message: data.message });
-      await load();
-    } catch (err) {
-      setTestResult({ connected: false, message: errMsg(err) });
-    } finally {
-      setClearingPassword(false);
-    }
-  };
-
-  if (!settings) return <AppShell title="Settings"><div /></AppShell>;
-
-  return (
-    <AppShell title="Settings">
-      <div className="max-w-2xl space-y-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-ink">
-              {mailProvider === 'mailjet' ? 'Mailjet Email API' : mailProvider === 'resend' ? 'Resend Email API' : 'Google SMTP'}
-            </h3>
-            <Badge tone={settings.smtpConnected ? 'success' : 'default'}>
-              {settings.smtpConnected ? 'Connected' : 'Not Connected'}
-            </Badge>
-          </div>
-          <div className="mb-4">
-            <Select label="Active Mail Provider" value={mailProvider} onChange={(e) => selectProvider(e.target.value)}>
-              <option value="mailjet">Mailjet API{providerConfigurations.mailjet ? ' — configured' : ''}</option>
-              <option value="resend">Resend API{providerConfigurations.resend ? ' — configured' : ''}</option>
-              <option value="smtp">Google SMTP{providerConfigurations.smtp ? ' — configured' : ''}</option>
-            </Select>
-            {activeProvider !== mailProvider && (
-              <p className="text-xs text-amber-700 mt-1.5">Save Settings to activate this provider.</p>
-            )}
-          </div>
-          <p className="text-xs text-ink-soft mb-4">
-            {mailProvider === 'mailjet'
-              ? (envConfigured
-                ? 'Mailjet API credentials and a sender are configured securely on the backend.'
-                : 'Mailjet is selected but its API key, secret, or verified sender is missing from the backend environment.')
-              : mailProvider === 'resend'
-                ? (envConfigured
-                  ? 'Resend API credentials and a verified-domain sender are configured securely on the backend.'
-                  : 'Resend is selected but its API key or sender email is missing from the backend environment.')
-                : (envConfigured
-                ? 'A default SMTP user/app password is configured via environment variables. You can override the app password here if needed.'
-                : 'No SMTP credentials found in environment variables — set them here or in the backend .env file.')}
-          </p>
-          {activeSenderEmail && (
-            <p className="text-xs text-emerald-800 bg-emerald-50 rounded-lg px-3 py-2 mb-4">
-              Active From address: <span className="font-semibold">{activeSenderEmail}</span>
-            </p>
-          )}
-          {mailProvider === 'smtp' && storedPasswordConfigured && (
-            <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 mb-4">
-              An encrypted dashboard password is active and overrides the environment password.
-            </p>
-          )}
-          {mailProvider === 'smtp' && (
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <Input label="SMTP User (Gmail address)" value={settings.smtpUser} onChange={(e) => update('smtpUser', e.target.value)} placeholder="notifications@roundtable.com" />
-              <Input label="App Password" type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)} placeholder="Leave blank to keep current" />
-            </div>
-          )}
-          {mailProvider === 'mailjet' && (
-            <p className="text-xs text-ink-soft bg-surface-muted rounded-lg px-3 py-2 mb-4">
-              API credentials are managed in Render environment variables and are never exposed here. Sender Email below must be verified in Mailjet.
-            </p>
-          )}
-          {mailProvider === 'resend' && (
-            <p className="text-xs text-ink-soft bg-surface-muted rounded-lg px-3 py-2 mb-4">
-              The API key and RESEND_FROM_EMAIL are managed in the Mailer backend on Render and never exposed here. RESEND_FROM_EMAIL takes priority over the general Sender Email below.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary" size="sm" onClick={testProvider} disabled={testing || activeProvider !== mailProvider}>
-              <PlugZap size={14} /> {testing ? 'Testing…' : `Test ${mailProvider === 'mailjet' ? 'Mailjet API' : mailProvider === 'resend' ? 'Resend API' : 'SMTP Connection'}`}
-            </Button>
-            {mailProvider === 'smtp' && storedPasswordConfigured && (
-              <Button variant="ghost" size="sm" onClick={clearSavedPassword} disabled={clearingPassword}>
-                <Trash2 size={14} /> {clearingPassword ? 'Clearing…' : 'Clear Saved Password'}
-              </Button>
-            )}
-          </div>
-          <div className="mt-4 border-t border-surface-line pt-4">
-            <p className="text-xs font-semibold text-ink-soft mb-2">Send a real delivery test</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                type="email"
-                placeholder="recipient@example.com"
-                value={testRecipient}
-                onChange={(e) => setTestRecipient(e.target.value)}
-                className="sm:w-72"
-              />
-              <Button size="sm" onClick={sendTestEmail} disabled={sendingTest || !testRecipient || activeProvider !== mailProvider}>
-                <Send size={14} /> {sendingTest ? 'Sending…' : 'Send Test Email'}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-3">
-            {testResult && (
-              <span className={`text-xs font-semibold flex items-center gap-1 ${testResult.connected ? 'text-emerald-700' : 'text-danger'}`}>
-                {testResult.connected ? <CheckCircle2 size={14} /> : <XCircle size={14} />} {testResult.message}
-              </span>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-sm font-bold text-ink mb-4">Sender & Brand</h3>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Sender Name" value={settings.senderName} onChange={(e) => update('senderName', e.target.value)} />
-            <Input label="Sender Email" value={settings.senderEmail} onChange={(e) => update('senderEmail', e.target.value)} />
-            <Input label="Reply-To" value={settings.replyTo} onChange={(e) => update('replyTo', e.target.value)} />
-            <Input label="Support Email" value={settings.supportEmail} onChange={(e) => update('supportEmail', e.target.value)} />
-            <Input label="Website URL" value={settings.websiteUrl} onChange={(e) => update('websiteUrl', e.target.value)} />
-            <Input label="Savings Page URL" value={settings.savingsUrl} onChange={(e) => update('savingsUrl', e.target.value)} />
-            <Input label="Thrift Page URL" value={settings.thriftUrl} onChange={(e) => update('thriftUrl', e.target.value)} />
-            <Input label="Telegram Support URL" value={settings.telegramUrl} onChange={(e) => update('telegramUrl', e.target.value)} />
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-sm font-bold text-ink mb-4">Sending Queue</h3>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Batch Size" type="number" min={1} max={1000} step={1} value={settings.batchSize} onChange={(e) => update('batchSize', Number(e.target.value))} />
-            <Input
-              label="Delay Between Batches (minutes)"
-              type="number"
-              min={0}
-              max={1440}
-              step={1}
-              value={Math.round(settings.batchDelayMs / 60000)}
-              onChange={(e) => update('batchDelayMs', Number(e.target.value) * 60000)}
-            />
-          </div>
-          <p className="text-xs text-ink-soft mt-3">
-            These defaults pace campaign delivery and help protect your sender reputation and provider limits.
-          </p>
-        </Card>
-
-        <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Settings'}</Button>
-          {saved && (
-            <span className="text-xs text-emerald-700 font-semibold">
-              Saved: {settings.batchSize} per batch, {Math.round(settings.batchDelayMs / 60000)} minute delay.
-            </span>
-          )}
-        </div>
-      </div>
-    </AppShell>
-  );
+    <Card className="p-6"><h2 className="font-bold text-ink">Brand and email content</h2><p className="text-xs text-ink-soft mt-1 mb-5">These values are available as variables inside your templates.</p><div className="grid sm:grid-cols-2 gap-4"><Input label="Sender display name" value={settings.senderName} onChange={(e) => update('senderName',e.target.value)}/><Input label="Support email" value={settings.supportEmail} onChange={(e) => update('supportEmail',e.target.value)}/><Input label="Website URL" value={settings.websiteUrl} onChange={(e) => update('websiteUrl',e.target.value)}/><Input label="Telegram/support URL" value={settings.telegramUrl} onChange={(e) => update('telegramUrl',e.target.value)}/></div></Card>
+    <Card className="p-6"><h2 className="font-bold text-ink">Sending pace</h2><p className="text-xs text-ink-soft mt-1 mb-5">Conservative pacing supports provider limits and sender reputation.</p><div className="grid sm:grid-cols-2 gap-4"><Input label="Emails per batch" type="number" min="1" max="1000" value={settings.batchSize} onChange={(e) => update('batchSize',Number(e.target.value))}/><Input label="Minutes between batches" type="number" min="0" max="1440" value={Math.round(settings.batchDelayMs/60000)} onChange={(e) => update('batchDelayMs',Number(e.target.value)*60000)}/></div></Card>
+    {result && <p className={`text-xs font-semibold flex items-center gap-1.5 ${result.ok ? 'text-emerald-700' : 'text-danger'}`}>{result.ok ? <CheckCircle2 size={14}/> : <XCircle size={14}/>} {result.message}</p>}
+    <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save workspace settings'}</Button>
+  </div></AppShell>;
 }
+
+function Info({ label, value, icon: Icon }) { return <div className="bg-surface rounded-xl p-3.5 flex gap-3"><Icon size={16} className="text-emerald-600 mt-0.5 shrink-0"/><div className="min-w-0"><p className="text-[10px] uppercase tracking-wider text-ink-faint font-semibold">{label}</p><p className="text-sm font-semibold text-ink mt-0.5 truncate">{value}</p></div></div>; }

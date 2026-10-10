@@ -14,26 +14,27 @@ function getMailProvider(settings) {
 }
 
 function getSenderEmail(provider, settings) {
-  if (provider === 'resend') return process.env.RESEND_FROM_EMAIL || settings?.senderEmail || '';
-  if (provider === 'mailjet') return process.env.MAILJET_FROM_EMAIL || settings?.senderEmail || '';
-  return settings?.senderEmail || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '';
+  if (settings?.workspaceId) return settings.senderEmail || '';
+  if (provider === 'resend') return settings?.senderEmail || process.env.RESEND_FROM_EMAIL || '';
+  if (provider === 'mailjet') return settings?.senderEmail || process.env.MAILJET_FROM_EMAIL || '';
+  return settings?.senderEmail || settings?.smtpUser || process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '';
 }
 
-function resendApiKey() {
-  const apiKey = process.env.RESEND_API_KEY || '';
+function resendApiKey(settings) {
+  const apiKey = settings?.providerApiKeyEncrypted ? decryptSecret(settings.providerApiKeyEncrypted) : settings?.workspaceId ? '' : process.env.RESEND_API_KEY || '';
   if (!apiKey) {
     throw Object.assign(new Error('Resend is not configured. Add RESEND_API_KEY.'), { status: 400 });
   }
   return apiKey;
 }
 
-async function resendRequest(path, options = {}) {
+async function resendRequest(path, options = {}, settings) {
   const response = await fetch(`https://api.resend.com${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${resendApiKey()}`,
+      Authorization: `Bearer ${resendApiKey(settings)}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'RoundTable-Mailer/1.0',
+      'User-Agent': 'HeyMailer-Mailer/1.0',
       ...options.headers,
     },
     signal: AbortSignal.timeout(20000),
@@ -47,15 +48,15 @@ async function resendRequest(path, options = {}) {
   return data;
 }
 
-function mailjetCredentials() {
+function mailjetCredentials(settings) {
   return {
-    apiKey: process.env.MAILJET_API_KEY || '',
-    secretKey: process.env.MAILJET_SECRET_KEY || '',
+    apiKey: settings?.providerApiKeyEncrypted ? decryptSecret(settings.providerApiKeyEncrypted) : settings?.workspaceId ? '' : process.env.MAILJET_API_KEY || '',
+    secretKey: settings?.providerSecretEncrypted ? decryptSecret(settings.providerSecretEncrypted) : settings?.workspaceId ? '' : process.env.MAILJET_SECRET_KEY || '',
   };
 }
 
-function mailjetAuthHeader() {
-  const { apiKey, secretKey } = mailjetCredentials();
+function mailjetAuthHeader(settings) {
+  const { apiKey, secretKey } = mailjetCredentials(settings);
   if (!apiKey || !secretKey) {
     throw Object.assign(new Error('Mailjet is not configured. Add MAILJET_API_KEY and MAILJET_SECRET_KEY.'), {
       status: 400,
@@ -64,12 +65,12 @@ function mailjetAuthHeader() {
   return `Basic ${Buffer.from(`${apiKey}:${secretKey}`).toString('base64')}`;
 }
 
-async function mailjetRequest(path, options = {}) {
+async function mailjetRequest(path, options = {}, settings) {
   const baseUrl = (process.env.MAILJET_API_BASE_URL || 'https://api.mailjet.com').replace(/\/$/, '');
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
-      Authorization: mailjetAuthHeader(),
+      Authorization: mailjetAuthHeader(settings),
       'Content-Type': 'application/json',
       ...options.headers,
     },
@@ -116,11 +117,11 @@ function getIpv4Socket(options, callback) {
  * come from the .env file or from an admin-set override stored in Settings —
  * either way it is never sent back to the frontend.
  */
-async function getTransporter() {
-  const { user, pass } = await getSmtpCredentials();
-  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const secure = process.env.SMTP_SECURE === 'true';
+async function getTransporter(providedSettings) {
+  const { user, pass, settings } = await getSmtpCredentials(providedSettings);
+  const host = settings?.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = Number(settings?.smtpPort || process.env.SMTP_PORT) || 587;
+  const secure = settings?.smtpSecure ?? process.env.SMTP_SECURE === 'true';
   const forceIpv4 = process.env.SMTP_FORCE_IPV4 !== 'false';
 
   const passFingerprint = crypto.createHash('sha256').update(pass || '').digest('hex');
@@ -150,11 +151,11 @@ async function getTransporter() {
   return cachedTransporter;
 }
 
-async function getSmtpCredentials() {
-  const settings = await Settings.findOne({ singleton: 'main' }).select('+smtpAppPasswordOverride');
-  const user = settings?.smtpUser || process.env.SMTP_USER;
+async function getSmtpCredentials(providedSettings) {
+  const settings = providedSettings || await Settings.findOne({ singleton: 'main' }).select('+smtpAppPasswordOverride');
+  const user = settings?.smtpUser || (settings?.workspaceId ? '' : process.env.SMTP_USER);
   const storedPassword = settings?.smtpAppPasswordOverride;
-  const pass = storedPassword ? decryptSecret(storedPassword) : process.env.SMTP_APP_PASSWORD;
+  const pass = storedPassword ? decryptSecret(storedPassword) : settings?.workspaceId ? '' : process.env.SMTP_APP_PASSWORD;
   return { user, pass, settings };
 }
 
@@ -167,42 +168,51 @@ async function verifyConnection(providedSettings) {
   const settings = providedSettings || await Settings.findOne({ singleton: 'main' });
   const provider = getMailProvider(settings);
   if (provider === 'mailjet') {
-    await mailjetRequest('/v3/REST/myprofile?Limit=1');
+    await mailjetRequest('/v3/REST/myprofile?Limit=1', {}, settings);
     return true;
   }
   if (provider === 'resend') {
     const fromEmail = getSenderEmail(provider, settings);
-    const senderName = settings?.senderName || process.env.RESEND_FROM_NAME || 'RoundTable';
+    const senderName = settings?.senderName || process.env.RESEND_FROM_NAME || 'HeyMailer';
     if (!fromEmail) throw Object.assign(new Error('Resend sender email is not configured.'), { status: 400 });
     const senderHash = crypto.createHash('sha256').update(fromEmail).digest('hex').slice(0, 16);
     await resendRequest('/emails', {
       method: 'POST',
-      headers: { 'Idempotency-Key': `roundtable-provider-check-${senderHash}` },
+      headers: { 'Idempotency-Key': `heymailer-provider-check-${senderHash}` },
       body: JSON.stringify({
         from: `${senderName} <${fromEmail}>`,
         to: ['delivered@resend.dev'],
-        subject: 'RoundTable Resend configuration check',
+        subject: 'HeyMailer Resend configuration check',
         text: 'Provider configuration check.',
       }),
-    });
+    }, settings);
     return true;
   }
-  const transporter = await getTransporter();
+  const transporter = await getTransporter(settings);
   await transporter.verify();
   return true;
 }
 
-async function sendEmail({ to, subject, html, text, fromName, fromEmail: requestedFromEmail, replyTo, idempotencyKey }) {
-  const settings = await Settings.findOne({ singleton: 'main' });
+async function sendEmail({ to, subject, html, text, fromName, fromEmail: requestedFromEmail, replyTo, idempotencyKey, workspaceId, providedSettings, unsubscribeUrl }) {
+  const settings = providedSettings || (workspaceId ? await Settings.getForWorkspace(workspaceId, true) : await Settings.findOne({ singleton: 'main' }).select('+smtpAppPasswordOverride +providerApiKeyEncrypted +providerSecretEncrypted'));
   const provider = getMailProvider(settings);
   const fromEmail = String(requestedFromEmail || getSenderEmail(provider, settings)).trim().toLowerCase();
   const senderName = fromName || settings?.senderName
     || (provider === 'mailjet' ? process.env.MAILJET_FROM_NAME : null)
     || (provider === 'resend' ? process.env.RESEND_FROM_NAME : process.env.SMTP_FROM_NAME)
-    || 'RoundTable';
+    || 'HeyMailer';
 
   if (!fromEmail) {
     throw Object.assign(new Error('Sender email is not configured.'), { status: 400 });
+  }
+  if (workspaceId) {
+    const fromDomain = fromEmail.split('@')[1] || '';
+    if (!settings.sendingEnabled || settings.domainStatus !== 'verified') {
+      throw Object.assign(new Error('Sending is disabled until the workspace domain is verified by a super admin.'), { status: 403 });
+    }
+    if (!settings.sendingDomain || fromDomain !== settings.sendingDomain) {
+      throw Object.assign(new Error(`The From address must use the verified domain ${settings.sendingDomain}.`), { status: 400 });
+    }
   }
 
   if (provider === 'mailjet') {
@@ -218,9 +228,13 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
           Subject: subject,
           HTMLPart: html,
           TextPart: text,
+          Headers: unsubscribeUrl ? {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          } : undefined,
         }],
       }),
-    });
+    }, settings);
     const result = data.Messages?.[0];
     if (!result || result.Status !== 'success') {
       throw Object.assign(new Error('Mailjet did not accept the email.'), { status: 400 });
@@ -243,8 +257,12 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
         subject,
         html,
         text,
+        headers: unsubscribeUrl ? {
+          'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        } : undefined,
       }),
-    });
+    }, settings);
     return {
       response: `Resend accepted (${data.id || 'no message id'})`,
       messageId: data.id,
@@ -256,7 +274,7 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
     throw Object.assign(new Error(`Unsupported MAIL_PROVIDER: ${provider}`), { status: 400 });
   }
 
-  const transporter = await getTransporter();
+  const transporter = await getTransporter(settings);
 
   const info = await transporter.sendMail({
     from: `"${senderName}" <${fromEmail}>`,
@@ -265,6 +283,10 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
     subject,
     html,
     text,
+    headers: unsubscribeUrl ? {
+      'List-Unsubscribe': `<${unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    } : undefined,
   });
 
   return info;

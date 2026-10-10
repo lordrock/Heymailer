@@ -15,7 +15,12 @@ const draftRoutes = require('./routes/draftRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const billingRoutes = require('./routes/billingRoutes');
+const adminBillingRoutes = require('./routes/adminBillingRoutes');
+const adminWorkspaceRoutes = require('./routes/adminWorkspaceRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { requireAuth, requireActiveSubscription } = require('./middleware/auth');
+const { bindTenant } = require('./middleware/tenant');
 
 const app = express();
 
@@ -56,18 +61,22 @@ const apiLimiter = rateLimit({
 });
 app.use('/api', apiLimiter);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'roundtable-email-system' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'heymailer-email-system' }));
 
 app.use('/api/auth', authRoutes);
-app.use('/api/templates', templateRoutes);
-app.use('/api/contacts', contactRoutes);
-app.use('/api/contact-groups', contactGroupRoutes);
-app.use('/api/campaigns', campaignRoutes);
-app.use('/api/email-logs', emailLogRoutes);
-app.use('/api/drafts', draftRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+const workspaceAccess = [requireAuth, requireActiveSubscription, bindTenant];
+app.use('/api/templates', workspaceAccess, templateRoutes);
+app.use('/api/contacts', workspaceAccess, contactRoutes);
+app.use('/api/contact-groups', workspaceAccess, contactGroupRoutes);
+app.use('/api/campaigns', workspaceAccess, campaignRoutes);
+app.use('/api/email-logs', workspaceAccess, emailLogRoutes);
+app.use('/api/drafts', workspaceAccess, draftRoutes);
+app.use('/api/settings', workspaceAccess, settingsRoutes);
+app.use('/api/dashboard', workspaceAccess, dashboardRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/super-admin/billing', adminBillingRoutes);
+app.use('/api/super-admin/workspaces', adminWorkspaceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

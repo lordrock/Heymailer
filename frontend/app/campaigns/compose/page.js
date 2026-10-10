@@ -10,7 +10,7 @@ import api, { errMsg } from '@/lib/api';
 import { Send, Save, FileStack, ChevronRight, Users, UsersRound, X, MailCheck } from 'lucide-react';
 
 const emptyCampaign = {
-  name: '', subject: '', preheader: '', senderName: 'RoundTable', senderEmail: '', replyTo: '',
+  name: '', subject: '', preheader: '', senderName: 'HeyMailer', senderEmail: '', replyTo: '',
   templateId: '', htmlContent: '<p>Hi {{firstName}},</p>', textContent: 'Hi {{firstName}},',
   recipientType: 'group', contactIds: [], groupIds: [],
 };
@@ -49,12 +49,12 @@ function ComposeInner() {
         }));
       });
     }
-  }, []);
+  }, [draftId]);
 
   useEffect(() => {
     const templateId = params.get('templateId');
     if (templateId) loadTemplate(templateId, { keepName: false });
-  }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params]);
 
   useEffect(() => {
     if (draftId) {
@@ -220,7 +220,7 @@ function ComposeInner() {
               {[
                 ['Campaign', campaign.name],
                 ['Subject', campaign.subject],
-                ['Sender', campaign.senderName || 'RoundTable'],
+                ['Sender', campaign.senderName || 'HeyMailer'],
                 ['Sender Email', campaign.senderEmail],
                 ['Reply-To', campaign.replyTo || campaign.senderEmail],
                 ['Recipients', `${recipientPreview?.eligibleCount ?? 0} eligible${recipientPreview?.excludedCount ? ` (${recipientPreview.excludedCount} excluded — unsubscribed/inactive)` : ''}`],
@@ -264,18 +264,19 @@ function ComposeInner() {
         <div className="space-y-5">
           <Card className="p-5 space-y-4">
             <h3 className="text-xs font-bold text-ink-soft uppercase tracking-wide">Email Information</h3>
-            <Input label="Campaign / Email Name" value={campaign.name} onChange={(e) => update('name', e.target.value)} placeholder="RoundTable Savings Invitation August" />
+            <Input label="Campaign / Email Name" value={campaign.name} onChange={(e) => update('name', e.target.value)} placeholder="HeyMailer Savings Invitation August" />
             <div className="grid sm:grid-cols-2 gap-3">
               <Select label="Choose Template" value={campaign.templateId} onChange={(e) => e.target.value && loadTemplate(e.target.value)}>
                 <option value="">Select a template…</option>
                 {templates.map((t) => <option key={t._id} value={t._id}>{t.name}</option>)}
               </Select>
-              <Input label="Sender Name" value={campaign.senderName} onChange={(e) => update('senderName', e.target.value)} />
+              <Input label="Approved Sender Name" value={campaign.senderName} disabled />
             </div>
-            <Input label="Sender Email" type="email" value={campaign.senderEmail} onChange={(e) => update('senderEmail', e.target.value)} placeholder="mailer@your-verified-domain.com" />
+            <Input label="Approved From Email" type="email" value={campaign.senderEmail} disabled placeholder="Configured by HeyMailer administration" />
             <Input label="Subject" value={campaign.subject} onChange={(e) => update('subject', e.target.value)} placeholder="What if your savings could do more?" />
             <Input label="Preheader Text" value={campaign.preheader} onChange={(e) => update('preheader', e.target.value)} placeholder="Shown after the subject line in most inboxes" />
-            <Input label="Reply-To Email" type="email" value={campaign.replyTo} onChange={(e) => update('replyTo', e.target.value)} placeholder="support@roundtable.example.com" />
+            <Input label="Approved Reply-To Email" type="email" value={campaign.replyTo} disabled placeholder="Configured by HeyMailer administration" />
+            <p className="text-xs text-ink-soft">Your From and Reply-To identities are locked to the verified workspace domain configuration.</p>
           </Card>
 
           <Card className="p-5 space-y-4">

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('./plugins/tenantPlugin');
 
 const CATEGORIES = [
   'Marketing',
@@ -28,5 +29,6 @@ const emailTemplateSchema = new mongoose.Schema(
 emailTemplateSchema.index({ name: 'text', description: 'text' });
 
 emailTemplateSchema.statics.CATEGORIES = CATEGORIES;
+emailTemplateSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('EmailTemplate', emailTemplateSchema);

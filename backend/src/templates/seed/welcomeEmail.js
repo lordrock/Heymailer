@@ -1,13 +1,13 @@
 const { wrapEmail, button, divider, statCard } = require('./layout');
 
-const preheader = 'Your RoundTable account is ready. Here is how to get started.';
+const preheader = 'Your HeyMailer account is ready. Here is how to get started.';
 
 const bodyHtml = `
   <h1 style="margin:0 0 16px;font-size:22px;line-height:1.35;color:#14241C;font-weight:700;">
-    Welcome to RoundTable, {{firstName}}
+    Welcome to HeyMailer, {{firstName}}
   </h1>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
-    Your account is set up and ready. RoundTable gives you two simple ways to build
+    Your account is set up and ready. HeyMailer gives you two simple ways to build
     consistent savings habits — a structured Savings plan, and rotating Thrift circles
     for goal-based group saving.
   </p>
@@ -38,13 +38,13 @@ const bodyHtml = `
 module.exports = {
   name: 'Welcome Email',
   category: 'Transactional',
-  subject: 'Welcome to RoundTable — your account is ready',
+  subject: 'Welcome to HeyMailer — your account is ready',
   preheader,
   description: 'Sent to new users right after signup to orient them toward savings/thrift setup.',
   htmlContent: wrapEmail({ preheader, bodyHtml }),
-  textContent: `Welcome to RoundTable, {{firstName}}
+  textContent: `Welcome to HeyMailer, {{firstName}}
 
-Your account is set up and ready. RoundTable gives you two simple ways to build consistent savings habits — a structured Savings plan, and rotating Thrift circles for goal-based group saving.
+Your account is set up and ready. HeyMailer gives you two simple ways to build consistent savings habits — a structured Savings plan, and rotating Thrift circles for goal-based group saving.
 
 Account: {{email}}
 Status: Active
@@ -58,6 +58,6 @@ Go to your dashboard: {{websiteUrl}}
 
 Need a hand getting started? Message us on Telegram: {{telegramUrl}}
 
-RoundTable
+HeyMailer
 {{websiteUrl}}`,
 };

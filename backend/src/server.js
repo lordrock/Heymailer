@@ -20,7 +20,7 @@ async function start() {
   await resumeInFlightCampaigns();
 
   app.listen(PORT, () => {
-    console.log(`[server] RoundTable Email System API running on port ${PORT}`);
+    console.log(`[server] HeyMailer Email System API running on port ${PORT}`);
     startBounceProcessor().catch((err) => console.error('[bounce] failed to start:', err.message));
   });
 }

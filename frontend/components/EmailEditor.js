@@ -61,7 +61,7 @@ export default function EmailEditor({ value, onChange, variables = [] }) {
         return;
       }
       case 'button': {
-        const label = prompt('Button label', 'Explore RoundTable Savings') || 'Learn More';
+        const label = prompt('Button label', 'Explore HeyMailer Savings') || 'Learn More';
         const url = prompt('Button URL', '{{savingsUrl}}') || '#';
         exec(
           'insertHTML',

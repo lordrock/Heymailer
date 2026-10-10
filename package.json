@@ -1,8 +1,8 @@
 {
-  "name": "roundtable-email-system",
+  "name": "heymailer-email-system",
   "version": "1.0.0",
   "private": true,
-  "description": "RoundTable email marketing and composer system",
+  "description": "HeyMailer email marketing and composer system",
   "workspaces": [
     "backend",
     "frontend"

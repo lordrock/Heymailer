@@ -1,7 +1,7 @@
 /**
  * In-app sending queue.
  *
- * Why not Redis/BullMQ: at RoundTable's current volume, a durable queue
+ * Why not Redis/BullMQ: at HeyMailer's current volume, a durable queue
  * backed by MongoDB (the single source of truth already used everywhere
  * else) is simpler to operate and just as safe — every unit of work is an
  * EmailLog document with a status, so a server restart mid-campaign just
@@ -17,6 +17,7 @@ const Settings = require('../models/Settings');
 const Unsubscribe = require('../models/Unsubscribe');
 const { sendEmail } = require('./mailer');
 const { resolveVariables } = require('./templateEngine');
+const { buildUnsubscribeUrl } = require('../utils/unsubscribeToken');
 
 const POLL_INTERVAL_MS = Number(process.env.QUEUE_POLL_INTERVAL_MS) || 10000;
 
@@ -28,15 +29,15 @@ async function resolveRecipients(campaign) {
   const ids = new Set(campaign.contactIds.map(String));
 
   if (campaign.groupIds?.length) {
-    const groupContacts = await Contact.find({ groups: { $in: campaign.groupIds } }).select('_id');
+    const groupContacts = await Contact.find({ workspaceId: campaign.workspaceId, groups: { $in: campaign.groupIds } }).select('_id');
     groupContacts.forEach((c) => ids.add(String(c._id)));
   }
 
   const unsubscribed = new Set(
-    (await Unsubscribe.find({}).select('email')).map((u) => u.email.toLowerCase())
+    (await Unsubscribe.find({ workspaceId: campaign.workspaceId }).select('email')).map((u) => u.email.toLowerCase())
   );
 
-  const contacts = await Contact.find({ _id: { $in: [...ids] } });
+  const contacts = await Contact.find({ workspaceId: campaign.workspaceId, _id: { $in: [...ids] } });
   return contacts.filter(
     (c) => c.status === 'active' && !unsubscribed.has(c.email.toLowerCase())
   );
@@ -60,6 +61,7 @@ async function enqueueCampaign(campaignId) {
 
   const logs = recipients.map((contact) => ({
     campaignId: campaign._id,
+    workspaceId: campaign.workspaceId,
     contactId: contact._id,
     recipientEmail: contact.email,
     subject: campaign.subject,
@@ -83,10 +85,11 @@ async function enqueueCampaign(campaignId) {
 
 async function sendOneLog(log, campaign, settings, baseUrl) {
   try {
-    const contact = await Contact.findById(log.contactId);
+    const contact = await Contact.findOne({ _id: log.contactId, workspaceId: campaign.workspaceId });
     const html = resolveVariables(campaign.htmlContent, { contact, settings, baseUrl });
     const text = resolveVariables(campaign.textContent, { contact, settings, baseUrl });
     const subject = resolveVariables(campaign.subject, { contact, settings, baseUrl });
+    const unsubscribeUrl = buildUnsubscribeUrl(baseUrl, log.recipientEmail, campaign.workspaceId, settings.unsubscribeEndpoint);
 
     const info = await sendEmail({
       to: log.recipientEmail,
@@ -96,7 +99,10 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
       fromName: campaign.senderName,
       fromEmail: campaign.senderEmail,
       replyTo: campaign.replyTo,
-      idempotencyKey: `roundtable-campaign-${campaign._id}-email-${log._id}`,
+      idempotencyKey: `heymailer-campaign-${campaign._id}-email-${log._id}`,
+      workspaceId: campaign.workspaceId,
+      providedSettings: settings,
+      unsubscribeUrl,
     });
 
     log.status = 'sent';
@@ -120,7 +126,7 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
 
 async function processCampaignBatch(campaign, settings, baseUrl) {
   const batchSize = campaign.batchSize ?? settings.batchSize ?? 5;
-  const logs = await EmailLog.find({ campaignId: campaign._id, status: 'pending' })
+  const logs = await EmailLog.find({ workspaceId: campaign.workspaceId, campaignId: campaign._id, status: 'pending' })
     .limit(batchSize);
 
   if (logs.length === 0) {
@@ -146,10 +152,10 @@ async function tick() {
     const sendingCampaigns = await Campaign.find({ status: 'sending' });
     if (sendingCampaigns.length === 0) return;
 
-    const settings = await Settings.getSingleton();
     const baseUrl = process.env.SERVER_BASE_URL || `http://localhost:${process.env.PORT || 5100}`;
 
     for (const campaign of sendingCampaigns) {
+      const settings = await Settings.getForWorkspace(campaign.workspaceId, true);
       const delay = campaign.batchDelayMs ?? settings.batchDelayMs ?? 0;
       const dueForNextBatch =
         !campaign.lastBatchAt || Date.now() - new Date(campaign.lastBatchAt).getTime() >= delay;

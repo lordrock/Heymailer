@@ -28,7 +28,8 @@ export function AuthProvider({ children }) {
   }, [fetchMe]);
 
   useEffect(() => {
-    if (!loading && !admin && pathname !== '/login') {
+    const publicAuthRoute = pathname === '/login' || pathname.startsWith('/auth/');
+    if (!loading && !admin && !publicAuthRoute) {
       router.replace('/login');
     }
   }, [loading, admin, pathname, router]);
@@ -39,6 +40,20 @@ export function AuthProvider({ children }) {
     setAdmin(data.admin);
     return data.admin;
   };
+
+  const signup = async (payload) => {
+    const { data } = await api.post('/auth/signup', payload);
+    if (data.token) window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    if (data.admin) setAdmin(data.admin);
+    return data;
+  };
+
+  const completeTokenAuth = useCallback(async (endpoint, token) => {
+    const { data } = await api.post(endpoint, { token });
+    if (data.token) window.localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    if (data.admin) setAdmin(data.admin);
+    return data;
+  }, []);
 
   const logout = async () => {
     try {
@@ -51,7 +66,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ admin, loading, login, logout, refetch: fetchMe }}>
+    <AuthContext.Provider value={{ admin, loading, login, signup, completeTokenAuth, logout, refetch: fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

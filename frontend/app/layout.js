@@ -1,31 +1,31 @@
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://roundtablemailer.netlify.app';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3100';
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'RoundTable Email Studio',
-  description: 'Internal email marketing & communication system for RoundTable',
+  title: 'HeyMailer',
+  description: 'Professional email campaign services, audience management and reliable delivery for growing teams.',
   openGraph: {
     type: 'website',
     url: '/',
-    siteName: 'RoundTable Email Studio',
-    title: 'RoundTable Email Studio',
-    description: 'Compose, personalise and deliver thoughtful RoundTable campaigns from one secure workspace.',
+    siteName: 'HeyMailer',
+    title: 'HeyMailer',
+    description: 'Professional email campaigns, audience management and reliable delivery—all in one place.',
     images: [
       {
         url: '/opengraph-image',
         width: 1200,
         height: 630,
-        alt: 'RoundTable Email Studio — communications and campaign management',
+        alt: 'HeyMailer — email campaign services for growing teams',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RoundTable Email Studio',
-    description: 'Compose, personalise and deliver thoughtful RoundTable campaigns from one secure workspace.',
+    title: 'HeyMailer',
+    description: 'Professional email campaigns, audience management and reliable delivery—all in one place.',
     images: ['/opengraph-image'],
   },
 };

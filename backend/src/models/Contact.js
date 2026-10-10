@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('./plugins/tenantPlugin');
 
 const contactSchema = new mongoose.Schema(
   {
@@ -12,7 +13,7 @@ const contactSchema = new mongoose.Schema(
     },
     tags: [{ type: String, trim: true }],
     groups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ContactGroup' }],
-    // Optional fields that power the RoundTable-specific personalisation variables
+    // Optional fields that power the HeyMailer-specific personalisation variables
     customFields: {
       totalSavings: { type: Number },
       depositAmount: { type: Number },
@@ -27,7 +28,8 @@ const contactSchema = new mongoose.Schema(
   { timestamps: true, collection: 'mail_contacts' }
 );
 
-contactSchema.index({ email: 1 }, { unique: true, name: 'mail_contact_email_unique' });
-contactSchema.index({ firstName: 'text', lastName: 'text', email: 'text' });
+contactSchema.index({ workspaceId: 1, email: 1 }, { unique: true, name: 'mail_workspace_contact_email_unique' });
+contactSchema.index({ workspaceId: 1, firstName: 1, lastName: 1 });
+contactSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Contact', contactSchema);

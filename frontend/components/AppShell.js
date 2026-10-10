@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
 import {
   LayoutDashboard, Megaphone, PenSquare, FileStack, Users, UsersRound,
-  FileClock, History, Settings as SettingsIcon, LogOut, Menu, X,
+  FileClock, History, Settings as SettingsIcon, LogOut, Menu, X, CreditCard, ShieldCheck, Building2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
@@ -20,18 +20,22 @@ const NAV = [
   { href: '/drafts', label: 'Drafts', icon: FileClock },
   { href: '/sent-emails', label: 'Sent Emails', icon: History },
   { href: '/settings', label: 'Settings', icon: SettingsIcon },
+  { href: '/billing', label: 'Billing', icon: CreditCard },
 ];
 
 function Logo() {
   return (
     <div className="flex items-center gap-2.5 px-1">
-      <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-        <circle cx="15" cy="15" r="13" stroke="#0B7A53" strokeWidth="2" strokeDasharray="4 3.4" />
-        <circle cx="15" cy="15" r="6.5" fill="#0B7A53" />
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#EAF8F1" />
+        <rect x="6.5" y="9.5" width="19" height="14" rx="2.5" fill="#0B7A53" />
+        <path d="m8 11 6.6 5.3a2.2 2.2 0 0 0 2.8 0L24 11" stroke="#EAF8F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="25" cy="8" r="4" fill="#FBBF24" stroke="#062F24" />
+        <path d="m23.5 8 1 1 2-2" stroke="#062F24" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <div>
-        <p className="text-white text-sm font-bold leading-none">RoundTable</p>
-        <p className="text-emerald-100/60 text-[10px] font-medium tracking-wide mt-0.5">EMAIL STUDIO</p>
+        <p className="text-white text-sm font-bold leading-none">HeyMailer</p>
+        <p className="text-emerald-100/60 text-[10px] font-medium tracking-wide mt-0.5">EMAIL SERVICES</p>
       </div>
     </div>
   );
@@ -45,7 +49,7 @@ function SidebarContent({ pathname, onNavigate }) {
         <Logo />
       </div>
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {[...NAV, ...(admin?.role === 'superadmin' ? [{ href: '/super-admin/workspaces', label: 'Workspaces', icon: Building2 }, { href: '/super-admin/billing', label: 'Billing Control', icon: ShieldCheck }] : [])].map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href) && href !== '/campaigns/compose') || pathname === href;
           const isActive = pathname === href;
           return (

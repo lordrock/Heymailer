@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const AUTH_TOKEN_KEY = 'rt_email_admin_token';
+export const AUTH_TOKEN_KEY = 'heymailer_token';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5100/api',
@@ -25,6 +25,9 @@ api.interceptors.response.use(
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
       const onLogin = window.location.pathname.startsWith('/login');
       if (!onLogin) window.location.href = '/login';
+    }
+    if (typeof window !== 'undefined' && err?.response?.status === 402 && !window.location.pathname.startsWith('/billing')) {
+      window.location.href = '/billing';
     }
     return Promise.reject(err);
   }

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('./plugins/tenantPlugin');
 
 const emailLogSchema = new mongoose.Schema(
   {
@@ -29,5 +30,6 @@ const emailLogSchema = new mongoose.Schema(
 );
 
 emailLogSchema.index({ campaignId: 1, status: 1 });
+emailLogSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('EmailLog', emailLogSchema);

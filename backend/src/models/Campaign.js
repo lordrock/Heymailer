@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('./plugins/tenantPlugin');
 
 const STATUSES = ['draft', 'scheduled', 'sending', 'completed', 'failed', 'cancelled'];
 
@@ -7,7 +8,7 @@ const campaignSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     subject: { type: String, required: true, trim: true },
     preheader: { type: String, trim: true, default: '' },
-    senderName: { type: String, trim: true, default: 'RoundTable' },
+    senderName: { type: String, trim: true, default: 'HeyMailer' },
     senderEmail: { type: String, trim: true, lowercase: true, default: '' },
     replyTo: { type: String, trim: true },
 
@@ -43,5 +44,6 @@ const campaignSchema = new mongoose.Schema(
 );
 
 campaignSchema.statics.STATUSES = STATUSES;
+campaignSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Campaign', campaignSchema);

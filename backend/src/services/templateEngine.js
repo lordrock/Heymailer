@@ -11,6 +11,7 @@ const CONTACT_VARIABLES = [
 ];
 
 const BRAND_VARIABLES = [
+  { key: 'senderName', label: 'Sender Name' },
   { key: 'websiteUrl', label: 'Website URL' },
   { key: 'savingsUrl', label: 'Savings Page URL' },
   { key: 'thriftUrl', label: 'Thrift Page URL' },
@@ -51,13 +52,16 @@ function resolveVariables(content, { contact, settings, baseUrl }) {
     firstName: contact?.firstName || 'there',
     lastName: contact?.lastName || '',
     email: contact?.email || '',
+    senderName: settings?.senderName || '',
 
     websiteUrl: settings?.websiteUrl || '',
     savingsUrl: settings?.savingsUrl || '',
     thriftUrl: settings?.thriftUrl || '',
     telegramUrl: settings?.telegramUrl || '',
     supportEmail: settings?.supportEmail || '',
-    unsubscribeUrl: contact?.email && baseUrl ? buildUnsubscribeUrl(baseUrl, contact.email) : '#',
+    unsubscribeUrl: contact?.email && baseUrl && settings?.workspaceId
+      ? buildUnsubscribeUrl(baseUrl, contact.email, settings.workspaceId, settings.unsubscribeEndpoint)
+      : '#',
 
     totalSavings: custom.totalSavings,
     depositAmount: custom.depositAmount,

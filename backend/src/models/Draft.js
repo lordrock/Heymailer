@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('./plugins/tenantPlugin');
 
 const draftSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, default: 'Untitled Draft' },
     subject: { type: String, trim: true, default: '' },
     preheader: { type: String, trim: true, default: '' },
-    senderName: { type: String, trim: true, default: 'RoundTable' },
+    senderName: { type: String, trim: true, default: 'HeyMailer' },
     senderEmail: { type: String, trim: true, lowercase: true, default: '' },
     replyTo: { type: String, trim: true, default: '' },
 
@@ -21,5 +22,7 @@ const draftSchema = new mongoose.Schema(
   },
   { timestamps: true, collection: 'mail_drafts' }
 );
+
+draftSchema.plugin(tenantPlugin);
 
 module.exports = mongoose.model('Draft', draftSchema);

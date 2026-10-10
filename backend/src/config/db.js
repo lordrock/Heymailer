@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 async function connectDB() {
   const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB_NAME || 'roundtable_mail';
+  const dbName = process.env.MONGODB_DB_NAME || 'heymailer';
 
   if (!uri) {
     console.error('MONGODB_URI is not set. Check your .env file.');

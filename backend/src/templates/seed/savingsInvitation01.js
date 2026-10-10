@@ -10,12 +10,12 @@ const bodyHtml = `
     Hi {{firstName}},
   </p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
-    RoundTable Savings gives you a structured way to grow your money while you save towards
+    HeyMailer Savings gives you a structured way to grow your money while you save towards
     the goals that matter to you. No guesswork, no complicated forms — just a simple plan
     that works quietly in the background.
   </p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
-    Depending on the plan you choose, eligible RoundTable savings may provide:
+    Depending on the plan you choose, eligible HeyMailer savings may provide:
   </p>
   <ul style="margin:0 0 20px;padding-left:20px;font-size:15px;line-height:1.8;color:#14241C;">
     <li>Up to <strong>15%</strong> on qualifying deposits</li>
@@ -25,12 +25,12 @@ const bodyHtml = `
     Returns depend on the specific plan and applicable terms and are not guaranteed unless
     stated otherwise in your plan agreement.
   </p>
-  ${button('Explore RoundTable Savings', '{{savingsUrl}}')}
+  ${button('Explore HeyMailer Savings', '{{savingsUrl}}')}
   <br>
   ${secondaryButton('Talk to Us on Telegram', '{{telegramUrl}}')}
   ${divider()}
   <p style="margin:0;font-size:13px;line-height:1.6;color:#98A29C;">
-    Questions about how RoundTable Savings works? Reply to this email or reach us on Telegram —
+    Questions about how HeyMailer Savings works? Reply to this email or reach us on Telegram —
     we're happy to walk you through it.
   </p>
 `;
@@ -40,24 +40,24 @@ module.exports = {
   category: 'Savings',
   subject: "What if your savings could do more?",
   preheader,
-  description: 'Marketing invitation introducing RoundTable Savings and its return structure.',
+  description: 'Marketing invitation introducing HeyMailer Savings and its return structure.',
   htmlContent: wrapEmail({ preheader, bodyHtml }),
   textContent: `Hi {{firstName}},
 
 What if the money you're already saving could do more?
 
-RoundTable Savings gives you a structured way to grow your money while you save towards the goals that matter to you.
+HeyMailer Savings gives you a structured way to grow your money while you save towards the goals that matter to you.
 
-Depending on the plan you choose, eligible RoundTable savings may provide:
+Depending on the plan you choose, eligible HeyMailer savings may provide:
 - Up to 15% on qualifying deposits
 - An additional 10% linked to your total savings, according to applicable terms
 
 Returns depend on the specific plan and applicable terms and are not guaranteed unless stated otherwise in your plan agreement.
 
-Explore RoundTable Savings: {{savingsUrl}}
+Explore HeyMailer Savings: {{savingsUrl}}
 Talk to us on Telegram: {{telegramUrl}}
 
-RoundTable
+HeyMailer
 {{websiteUrl}}
 
 To stop receiving marketing emails: {{unsubscribeUrl}}`,

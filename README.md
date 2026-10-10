@@ -1,12 +1,12 @@
-# RoundTable Email Marketing & Composer System
+# HeyMailer
 
-An internal dashboard for the RoundTable team to compose branded HTML emails, manage
+An internal dashboard for the HeyMailer team to compose branded HTML emails, manage
 reusable templates, personalise and send campaigns through Mailjet's HTTPS API or Google SMTP, and track
 delivery — built as a **standalone** app that shares your existing MongoDB cluster.
 
 - **Backend:** Node.js / Express / MongoDB (Mongoose), JWT auth (single admin), Mailjet Send API + optional Nodemailer SMTP
 - **Frontend:** Next.js 14 (App Router) / TypeScript-ready / Tailwind CSS
-- **Queue:** In-app, MongoDB-backed batch sender (no Redis needed at RoundTable's volume — see note below)
+- **Queue:** In-app, MongoDB-backed batch sender (no Redis needed at HeyMailer's volume — see note below)
 
 Requires Node.js 20.9 or newer.
 
@@ -15,7 +15,7 @@ Requires Node.js 20.9 or newer.
 ## 1. Project Structure
 
 ```
-roundtable-email-system/
+heymailer-email-system/
 ├── package.json        Root npm workspace and shared commands
 ├── backend/            Express API, MongoDB models, mailer, queue, seed templates
 └── frontend/            Next.js 14 admin dashboard
@@ -38,10 +38,9 @@ cp .env.example .env
 
 Edit `.env`:
 
-- **MONGODB_URI** — point this at your existing MongoDB Atlas cluster.
-- **MONGODB_DB_NAME** — defaults to the dedicated `roundtable_mail` database. This app
-  also explicitly prefixes every collection with `mail_`, so it cannot collide with
-  collections belonging to the existing RoundTable project in the same cluster.
+- **MONGODB_URI** — add the new MongoDB connection string when it is available.
+- **MONGODB_DB_NAME** — defaults to the dedicated `heymailer` database. This app
+  explicitly prefixes every collection with `mail_`.
 - **JWT_SECRET / UNSUBSCRIBE_SECRET** — set these to long random strings.
 - **CLIENT_URL / SERVER_BASE_URL** — the public frontend and backend origins. In
   production both must use HTTPS. `SERVER_BASE_URL` is used for unsubscribe links.
@@ -164,7 +163,7 @@ Because every unit of work lives in MongoDB (not in memory), **restarting the ba
 mid-campaign is safe** — `resumeInFlightCampaigns()` runs on boot and picks any
 `sending` campaign right back up.
 
-**Why not Redis/BullMQ:** at RoundTable's current volume this adds real operational
+**Why not Redis/BullMQ:** at HeyMailer's current volume this adds real operational
 weight (a Redis instance to run, monitor, and back up) for very little benefit. If
 sending volume grows into the tens of thousands, `services/queue.js` is written so the
 `processCampaignBatch` logic can move into a BullMQ worker without touching any of the
@@ -219,11 +218,11 @@ editable copy):
 
 - **Savings Invitation 01** — "What if your savings could do more?"
 - **Savings Invitation 02** — "You earn money. But how much of it actually stays with you?"
-- **RoundTable Thrift Invitation** — rotating thrift/Ajo structure
+- **HeyMailer Thrift Invitation** — rotating thrift/Ajo structure
 - **Welcome Email** — transactional, sent right after signup
 
 All four use a shared, Outlook-safe, table-based HTML shell
-(`backend/src/templates/seed/layout.js`) in the RoundTable Emerald/Deep Green palette
+(`backend/src/templates/seed/layout.js`) in the HeyMailer Emerald/Deep Green palette
 from the brief.
 
 ---
@@ -232,7 +231,7 @@ from the brief.
 
 Available in the composer's **Insert Variable** menu (`GET /api/public/variables`):
 
-| Contact | Brand / Links | RoundTable Customer Data |
+| Contact | Brand / Links | HeyMailer Customer Data |
 |---|---|---|
 | `{{firstName}}` | `{{websiteUrl}}` | `{{totalSavings}}` |
 | `{{lastName}}` | `{{savingsUrl}}` | `{{depositAmount}}` |
@@ -244,7 +243,7 @@ Available in the composer's **Insert Variable** menu (`GET /api/public/variables
 
 The customer-data variables read from `Contact.customFields` — populate these per
 contact (via the API, a future CSV column, or manually) as you wire this into your
-main RoundTable user data.
+main HeyMailer user data.
 
 ---
 

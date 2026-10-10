@@ -11,12 +11,12 @@ const bodyHtml = `
   </p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
     Earning is only half the story. What you keep — and how consistently you set it aside —
-    is what actually moves you toward your goals. RoundTable Savings is built around that
+    is what actually moves you toward your goals. HeyMailer Savings is built around that
     second half: a simple structure that makes consistent saving easier to stick to.
   </p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#637069;">
     Set a target, choose a plan, and let your discipline compound — with applicable
-    RoundTable returns working alongside it.
+    HeyMailer returns working alongside it.
   </p>
   ${divider()}
   <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#14241C;font-weight:600;">
@@ -27,7 +27,7 @@ const bodyHtml = `
     <li>Track progress toward a specific goal</li>
     <li>Earn applicable returns on qualifying balances</li>
   </ul>
-  ${button('Start Saving with RoundTable', '{{savingsUrl}}')}
+  ${button('Start Saving with HeyMailer', '{{savingsUrl}}')}
   ${divider()}
   <p style="margin:0;font-size:13px;line-height:1.6;color:#98A29C;">
     Have a goal in mind already? Reply and tell us — we'll help you figure out the right plan.
@@ -45,16 +45,16 @@ module.exports = {
 
 You earn money. But how much of it actually stays with you?
 
-Earning is only half the story. What you keep — and how consistently you set it aside — is what actually moves you toward your goals. RoundTable Savings is built around that second half.
+Earning is only half the story. What you keep — and how consistently you set it aside — is what actually moves you toward your goals. HeyMailer Savings is built around that second half.
 
 A structure that works with you:
 - Save on your own schedule, in amounts that suit you
 - Track progress toward a specific goal
 - Earn applicable returns on qualifying balances
 
-Start saving with RoundTable: {{savingsUrl}}
+Start saving with HeyMailer: {{savingsUrl}}
 
-RoundTable
+HeyMailer
 {{websiteUrl}}
 
 To stop receiving marketing emails: {{unsubscribeUrl}}`,

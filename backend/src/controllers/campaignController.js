@@ -10,6 +10,16 @@ const queue = require('../services/queue');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function assertSendingIdentity(settings) {
+  if (!settings.sendingEnabled || settings.domainStatus !== 'verified') {
+    throw Object.assign(new Error('A super admin must verify and enable this workspace sending identity before email can be sent.'), { status: 403 });
+  }
+  const fromDomain = String(settings.senderEmail || '').split('@')[1]?.toLowerCase();
+  if (!fromDomain || fromDomain !== settings.sendingDomain) {
+    throw Object.assign(new Error('The approved From email does not match the verified sending domain.'), { status: 400 });
+  }
+}
+
 async function list(req, res) {
   const { status } = req.query;
   const filter = {};
@@ -49,7 +59,8 @@ async function resolveRecipientPreview(req, res) {
 
 async function create(req, res) {
   const body = req.body;
-  const settings = await Settings.getSingleton();
+  const settings = await Settings.getForWorkspace(req.admin.workspaceId, true);
+  assertSendingIdentity(settings);
 
   if (body.senderEmail && !EMAIL_PATTERN.test(String(body.senderEmail).trim())) {
     return res.status(400).json({ message: 'Enter a valid sender email address.' });
@@ -71,9 +82,9 @@ async function create(req, res) {
     name: body.name,
     subject: body.subject,
     preheader: body.preheader,
-    senderName: body.senderName,
-    senderEmail: body.senderEmail || settings.senderEmail,
-    replyTo: body.replyTo,
+    senderName: settings.senderName,
+    senderEmail: settings.senderEmail,
+    replyTo: settings.replyTo || settings.senderEmail,
     templateId: body.templateId || undefined,
     htmlContent: sanitizeEmailHtml(body.htmlContent),
     textContent: body.textContent,
@@ -119,7 +130,7 @@ async function update(req, res) {
   }
 
   const fields = [
-    'name', 'subject', 'preheader', 'senderName', 'senderEmail', 'replyTo', 'templateId',
+    'name', 'subject', 'preheader', 'templateId',
     'recipientType', 'contactIds', 'groupIds', 'batchSize', 'batchDelayMs',
   ];
   fields.forEach((f) => {
@@ -153,7 +164,8 @@ async function sendTest(req, res) {
     return res.status(400).json({ message: 'Enter a valid reply-to email address.' });
   }
 
-  const settings = await Settings.getSingleton();
+  const settings = await Settings.getForWorkspace(req.admin.workspaceId, true);
+  assertSendingIdentity(settings);
   const baseUrl = process.env.SERVER_BASE_URL || `http://localhost:${process.env.PORT || 5100}`;
   const fakeContact = { firstName: 'Test', lastName: 'User', email: testEmail, customFields: {
     totalSavings: 150000, depositAmount: 20000, interestAmount: 3000,
@@ -174,8 +186,11 @@ async function sendTest(req, res) {
       fromName: senderName,
       fromEmail: senderEmail,
       replyTo,
+      workspaceId: req.admin.workspaceId,
+      providedSettings: settings,
     });
     await EmailLog.create({
+      workspaceId: req.admin.workspaceId,
       recipientEmail: testEmail,
       subject: resolvedSubject,
       status: 'sent',
