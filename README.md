@@ -4,9 +4,9 @@ An internal dashboard for the HeyMailer team to compose branded HTML emails, man
 reusable templates, personalise and send campaigns through Mailjet's HTTPS API or Google SMTP, and track
 delivery — built as a **standalone** app that shares your existing MongoDB cluster.
 
-- **Backend:** Node.js / Express / MongoDB (Mongoose), JWT auth (single admin), Mailjet Send API + optional Nodemailer SMTP
-- **Frontend:** Next.js 14 (App Router) / TypeScript-ready / Tailwind CSS
-- **Queue:** In-app, MongoDB-backed batch sender (no Redis needed at HeyMailer's volume — see note below)
+- **Backend:** Node.js / Express / MongoDB (Mongoose), tenant-aware JWT auth, Mailjet Send API + optional Nodemailer SMTP
+- **Frontend:** Next.js 16 (App Router) / TypeScript-ready / Tailwind CSS
+- **Queue:** MongoDB-backed batch sender with Redis distributed locks for safe multi-instance processing
 
 Requires Node.js 20.9 or newer.
 
@@ -42,8 +42,11 @@ Edit `.env`:
 - **MONGODB_DB_NAME** — defaults to the dedicated `heymailer` database. This app
   explicitly prefixes every collection with `mail_`.
 - **JWT_SECRET / UNSUBSCRIBE_SECRET** — set these to long random strings.
-- **CLIENT_URL / SERVER_BASE_URL** — the public frontend and backend origins. In
-  production both must use HTTPS. `SERVER_BASE_URL` is used for unsubscribe links.
+- **FRONTEND_URL / SERVER_BASE_URL** — the public frontend and backend origins. In
+  production both must use HTTPS. `FRONTEND_URL` may contain a comma-separated list
+  of allowed frontend origins; its first origin is used in account emails.
+  `CLIENT_URL` remains a temporary backwards-compatible alias. `SERVER_BASE_URL` is
+  used for unsubscribe links.
 - **COOKIE_SAME_SITE** — use `none` when frontend and backend are hosted on different
   domains; production cookies are secure-only. Use `lax` when both share one site.
 - **ADMIN_EMAIL / ADMIN_PASSWORD** — used once by the seed script to create your single
@@ -163,11 +166,29 @@ Because every unit of work lives in MongoDB (not in memory), **restarting the ba
 mid-campaign is safe** — `resumeInFlightCampaigns()` runs on boot and picks any
 `sending` campaign right back up.
 
-**Why not Redis/BullMQ:** at HeyMailer's current volume this adds real operational
-weight (a Redis instance to run, monitor, and back up) for very little benefit. If
-sending volume grows into the tens of thousands, `services/queue.js` is written so the
-`processCampaignBatch` logic can move into a BullMQ worker without touching any of the
-controllers or the frontend.
+**Redis coordination:** MongoDB remains the durable email-job ledger. Redis provides
+shared API/auth rate limits and a per-campaign distributed lock, allowing multiple
+Render instances to run without sending the same batch concurrently. Configure the
+Render Key Value connection as `REDIS_URL`; production startup rejects a missing URL.
+
+### Delivery events and inbox placement
+
+HeyMailer treats these as separate measurements:
+
+- Signed Resend webhooks update sent, delivered, delayed, bounced, complained,
+  opened, clicked, and failed counts. In **Super Admin → Deliverability**, copy the
+  generated webhook URL (your `SERVER_BASE_URL` plus `/api/webhooks/resend`) into
+  Resend and save its `whsec_...` signing secret. The secret is encrypted at rest.
+- Inbox placement is estimated with controlled Gmail, Outlook, Yahoo, AOL, or custom
+  IMAP seed accounts configured on the same page. Campaign sends start a live seed
+  test automatically, and users can also run a preflight test from the campaign
+  detail page. Gmail category labels and standard Inbox/Junk folders are scanned by
+  the background placement processor.
+
+Placement results describe the configured seed sample; neither Resend nor standard
+email protocols expose every real recipient's private inbox folder. Seed mailbox
+credentials must be app passwords for accounts controlled by the operator and are
+encrypted with `SMTP_CREDENTIALS_ENCRYPTION_KEY`.
 
 ---
 
@@ -249,8 +270,10 @@ main HeyMailer user data.
 
 ## 9. Security Notes
 
-- Single-admin JWT auth via httpOnly, `sameSite: lax` cookie — not readable by
-  frontend JS, CSRF risk mitigated by SameSite + CORS allow-list.
+- JWT authentication uses an httpOnly cookie plus a bearer-token compatibility
+  fallback for deployments whose frontend and API are on different sites. CORS is
+  restricted to `FRONTEND_URL`, and workspace resources are scoped by tenant-aware
+  Mongoose query hooks.
 - Rate limiting on `/api/auth/login` (10 attempts / 15 min) and globally on `/api`
   (600 req / 15 min).
 - All template/campaign HTML is run through `sanitize-html` on save — script tags,

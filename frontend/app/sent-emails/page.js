@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { Card, Badge, statusTone, Input, Select, EmptyState, Spinner } from '@/components/ui';
 import api from '@/lib/api';
@@ -17,17 +17,16 @@ export default function SentEmailsPage() {
   const [search, setSearch] = useState('');
   const limit = 25;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data } = await api.get('/email-logs', { params: { status, search: search || undefined, page, limit } });
     setLogs(data.logs);
     setTotal(data.total);
-  };
+  }, [page, search, status]);
 
-  useEffect(() => { load(); }, [status, page]);
   useEffect(() => {
-    const t = setTimeout(() => { setPage(1); load(); }, 350);
+    const t = setTimeout(load, 350);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -36,9 +35,9 @@ export default function SentEmailsPage() {
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1 max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <Input placeholder="Search recipient email…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Search recipient email…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} className="pl-9" />
         </div>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="sm:w-44">
+        <Select value={status} onChange={(e) => { setPage(1); setStatus(e.target.value); }} className="sm:w-44">
           {STATUSES.map((s) => <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>)}
         </Select>
       </div>

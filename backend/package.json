@@ -7,14 +7,17 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "build": "node --check src/server.js",
+    "test": "node --test",
     "seed": "node src/utils/seed.js",
+    "check-auth": "node src/utils/checkAuthSetup.js",
     "reset-admin-password": "node src/utils/resetAdminPassword.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "csv-parse": "^5.5.6",
+    "csv-parse": "^7.0.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",
@@ -26,8 +29,11 @@
     "mongoose": "^8.6.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^9.0.5",
-    "sanitize-html": "^2.13.0"
+    "nodemailer": "^10.1.0",
+    "rate-limit-redis": "^4.2.0",
+    "redis": "^6.3.0",
+    "sanitize-html": "^2.13.0",
+    "svix": "^2.8.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

@@ -1,6 +1,8 @@
 const express = require('express');
 const { authRateLimit } = require('../middleware/authRateLimit');
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
+const { getRedisClient } = require('../config/redis');
 const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const { requireAuth } = require('../middleware/auth');
@@ -13,12 +15,14 @@ const router = express.Router();
 // credentials, verification mail, magic links, and password recovery.
 router.use(authRateLimit({ max: 20, key: (req) => `${req.ip || 'unknown'}:${String(req.body?.email || '').toLowerCase()}` }));
 
+const redis = getRedisClient();
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   message: { message: 'Too many login attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  ...(redis ? { store: new RedisStore({ sendCommand: (...args) => redis.sendCommand(args), prefix: 'heymailer:rate:login:' }) } : {}),
 });
 
 router.post(

@@ -6,7 +6,10 @@ const Workspace = require('../models/Workspace');
 const Settings = require('../models/Settings');
 const EmailTemplate = require('../models/EmailTemplate');
 const ContactGroup = require('../models/ContactGroup');
-const { sendPlatformEmail } = require('../services/platformEmail');
+const Subscription = require('../models/Subscription');
+const { assertPlatformMailReady, sendPlatformEmail } = require('../services/platformEmail');
+const { getPrimaryFrontendUrl } = require('../config/frontendUrl');
+const { renderAuthEmail } = require('../templates/authEmail');
 
 function signToken(admin) {
   return jwt.sign({ sub: admin._id.toString(), role: admin.role, ver: admin.tokenVersion || 0 }, process.env.JWT_SECRET, {
@@ -35,8 +38,9 @@ async function consumeSingleUseToken(rawToken, purpose) {
 }
 
 function clientUrl(path, token) {
-  const base = (process.env.CLIENT_URL || 'http://localhost:3100').split(',')[0].replace(/\/$/, '');
-  return `${base}${path}?token=${encodeURIComponent(token)}`;
+  const url = new URL(path, `${getPrimaryFrontendUrl()}/`);
+  url.searchParams.set('token', token);
+  return url.toString();
 }
 
 async function sendVerificationEmail(admin) {
@@ -46,7 +50,16 @@ async function sendVerificationEmail(admin) {
     to: admin.email,
     subject: 'Verify your HeyMailer email',
     text: `Welcome to HeyMailer. Verify your email within 24 hours: ${url}`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#14241c"><h1 style="font-size:24px">Verify your email</h1><p>Welcome to HeyMailer, ${admin.name}. Confirm your email to secure your workspace.</p><p><a href="${url}" style="display:inline-block;background:#0b7a53;color:white;text-decoration:none;padding:12px 18px;border-radius:8px">Verify email</a></p><p style="font-size:12px;color:#637069">This link expires in 24 hours.</p></div>`,
+    html: renderAuthEmail({
+      eyebrow: 'Workspace verification',
+      title: 'Confirm your email address',
+      greeting: `Welcome to HeyMailer, ${admin.name}.`,
+      body: 'Verify your email to activate secure access to your workspace and campaigns.',
+      buttonLabel: 'Verify my email',
+      url,
+      expiry: 'This verification link expires in 24 hours.',
+      securityNote: 'If you did not create a HeyMailer account, you can safely ignore this email.',
+    }),
   });
 }
 
@@ -144,6 +157,7 @@ async function verifyEmail(req, res) {
 }
 
 async function resendVerification(req, res) {
+  assertPlatformMailReady();
   const email = String(req.body.email || '').toLowerCase().trim();
   const admin = await Admin.findOne({ email, role: 'customer' });
   if (admin && !admin.emailVerified) {
@@ -153,13 +167,28 @@ async function resendVerification(req, res) {
 }
 
 async function requestMagicLink(req, res) {
+  assertPlatformMailReady();
   const email = String(req.body.email || '').toLowerCase().trim();
-  const admin = await Admin.findOne({ email, status: 'active' });
+  const admin = await Admin.findOne({ email });
   if (admin) {
     const token = await createSingleUseToken(admin._id, 'magic_login', 15);
     const url = clientUrl('/auth/magic-link', token);
     try {
-      await sendPlatformEmail({ to: admin.email, subject: 'Your HeyMailer sign-in link', text: `Sign in to HeyMailer within 15 minutes: ${url}`, html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#14241c"><h1 style="font-size:24px">Sign in to HeyMailer</h1><p>Use this secure, single-use link to access your workspace.</p><p><a href="${url}" style="display:inline-block;background:#0b7a53;color:white;text-decoration:none;padding:12px 18px;border-radius:8px">Sign in securely</a></p><p style="font-size:12px;color:#637069">This link expires in 15 minutes. Ignore it if you did not request it.</p></div>` });
+      await sendPlatformEmail({
+        to: admin.email,
+        subject: 'Your HeyMailer sign-in link',
+        text: `Sign in to HeyMailer within 15 minutes: ${url}`,
+        html: renderAuthEmail({
+          eyebrow: 'Passwordless sign-in',
+          title: 'Your secure sign-in link',
+          greeting: `Hello ${admin.name},`,
+          body: 'Use the button below to sign in to your HeyMailer workspace without a password.',
+          buttonLabel: 'Sign in to HeyMailer',
+          url,
+          expiry: 'This single-use link expires in 15 minutes.',
+          securityNote: 'If you did not request this link, ignore this email. Your account remains secure.',
+        }),
+      });
     } catch (err) { console.error('[auth] magic link failed:', err.message); }
   }
   res.json({ message: 'If the account exists, a sign-in link has been sent.' });
@@ -169,7 +198,7 @@ async function consumeMagicLink(req, res) {
   const record = await consumeSingleUseToken(req.body.token, 'magic_login');
   if (!record) return res.status(400).json({ message: 'This sign-in link is invalid or has expired.' });
   const admin = await Admin.findById(record.userId);
-  if (!admin || admin.status !== 'active') return res.status(403).json({ message: 'This account is unavailable.' });
+  if (!admin) return res.status(403).json({ message: 'This account is unavailable.' });
   if (!admin.emailVerified) { admin.emailVerified = true; admin.emailVerifiedAt = new Date(); }
   admin.lastLoginAt = new Date();
   await admin.save();
@@ -179,13 +208,28 @@ async function consumeMagicLink(req, res) {
 }
 
 async function forgotPassword(req, res) {
+  assertPlatformMailReady();
   const email = String(req.body.email || '').toLowerCase().trim();
-  const admin = await Admin.findOne({ email, status: 'active' });
+  const admin = await Admin.findOne({ email });
   if (admin) {
     const token = await createSingleUseToken(admin._id, 'reset_password', 30);
     const url = clientUrl('/auth/reset-password', token);
     try {
-      await sendPlatformEmail({ to: admin.email, subject: 'Reset your HeyMailer password', text: `Reset your password within 30 minutes: ${url}`, html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px;color:#14241c"><h1 style="font-size:24px">Reset your password</h1><p>We received a password reset request for your HeyMailer account.</p><p><a href="${url}" style="display:inline-block;background:#0b7a53;color:white;text-decoration:none;padding:12px 18px;border-radius:8px">Choose a new password</a></p><p style="font-size:12px;color:#637069">This link expires in 30 minutes.</p></div>` });
+      await sendPlatformEmail({
+        to: admin.email,
+        subject: 'Reset your HeyMailer password',
+        text: `Reset your password within 30 minutes: ${url}`,
+        html: renderAuthEmail({
+          eyebrow: 'Account recovery',
+          title: 'Choose a new password',
+          greeting: `Hello ${admin.name},`,
+          body: 'We received a request to reset the password for your HeyMailer account.',
+          buttonLabel: 'Reset my password',
+          url,
+          expiry: 'This password-reset link expires in 30 minutes.',
+          securityNote: 'If you did not request a password reset, ignore this email and keep using your current password.',
+        }),
+      });
     } catch (err) { console.error('[auth] password reset email failed:', err.message); }
   }
   res.json({ message: 'If the account exists, password-reset instructions have been sent.' });
@@ -213,7 +257,25 @@ async function logout(req, res) {
 }
 
 async function me(req, res) {
-  res.json({ admin: req.admin.toJSON() });
+  if (req.admin.role === 'superadmin') {
+    return res.json({ admin: req.admin.toJSON(), access: { state: 'active', workspaceStatus: null, subscriptionStatus: null } });
+  }
+  const [workspace, subscription] = await Promise.all([
+    Workspace.findById(req.admin.workspaceId).select('status hasRequestedDomain requestedDomain').lean(),
+    Subscription.findOne({ userId: req.admin._id }).select('status endsAt').lean(),
+  ]);
+  const subscriptionActive = subscription?.status === 'active' && subscription.endsAt > new Date();
+  const suspended = req.admin.status === 'suspended' || workspace?.status === 'suspended';
+  res.json({
+    admin: req.admin.toJSON(),
+    access: {
+      state: suspended ? 'suspended' : subscriptionActive ? 'active' : 'payment_required',
+      workspaceStatus: workspace?.status || 'missing',
+      subscriptionStatus: subscriptionActive ? 'active' : subscription?.status || 'none',
+      subscriptionEndsAt: subscription?.endsAt || null,
+      requestedDomain: workspace?.requestedDomain || '',
+    },
+  });
 }
 
 module.exports = { signup, login, logout, me, verifyEmail, resendVerification, requestMagicLink, consumeMagicLink, forgotPassword, resetPassword };

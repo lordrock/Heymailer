@@ -1,5 +1,7 @@
 const { sendEmail } = require('./mailer');
 
+const PUBLIC_MAILBOX_DOMAINS = new Set(['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'yahoo.com', 'icloud.com']);
+
 function platformSettings() {
   const provider = String(process.env.PLATFORM_MAIL_PROVIDER || process.env.MAIL_PROVIDER || 'resend').toLowerCase();
   // Keep platform mail independent from tenant settings, while accepting the
@@ -34,8 +36,26 @@ function platformSettings() {
   };
 }
 
-async function sendPlatformEmail({ to, subject, html, text }) {
-  return sendEmail({ to, subject, html, text, providedSettings: platformSettings() });
+function validatePlatformSettings(settings) {
+  if (!['resend', 'mailjet', 'smtp'].includes(settings.mailProvider)) {
+    throw Object.assign(new Error(`Unsupported platform mail provider: ${settings.mailProvider}`), { status: 503, code: 'MAIL_NOT_CONFIGURED' });
+  }
+  if (!settings.senderEmail) {
+    throw Object.assign(new Error('Platform sender email is not configured. Set PLATFORM_FROM_EMAIL or the selected provider sender address.'), { status: 503, code: 'MAIL_NOT_CONFIGURED' });
+  }
+  const senderDomain = settings.senderEmail.split('@')[1]?.toLowerCase();
+  if (settings.mailProvider === 'resend' && PUBLIC_MAILBOX_DOMAINS.has(senderDomain)) {
+    throw Object.assign(new Error(`Resend cannot send from ${senderDomain}. Set RESEND_FROM_EMAIL to an address on a domain verified in Resend.`), { status: 503, code: 'MAIL_NOT_CONFIGURED' });
+  }
+  return settings;
 }
 
-module.exports = { sendPlatformEmail };
+function assertPlatformMailReady() {
+  return validatePlatformSettings(platformSettings());
+}
+
+async function sendPlatformEmail({ to, subject, html, text }) {
+  return sendEmail({ to, subject, html, text, providedSettings: validatePlatformSettings(platformSettings()) });
+}
+
+module.exports = { platformSettings, validatePlatformSettings, assertPlatformMailReady, sendPlatformEmail };

@@ -7,6 +7,8 @@ const workspaceSchema = new mongoose.Schema(
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
     status: { type: String, enum: ['active', 'suspended'], default: 'active', index: true },
     sendingEnabled: { type: Boolean, default: false },
+    hasRequestedDomain: { type: Boolean, default: false },
+    requestedDomain: { type: String, trim: true, lowercase: true, default: '' },
   },
   { timestamps: true, collection: 'mail_workspaces' }
 );

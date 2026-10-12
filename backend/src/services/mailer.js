@@ -193,7 +193,7 @@ async function verifyConnection(providedSettings) {
   return true;
 }
 
-async function sendEmail({ to, subject, html, text, fromName, fromEmail: requestedFromEmail, replyTo, idempotencyKey, workspaceId, providedSettings, unsubscribeUrl }) {
+async function sendEmail({ to, subject, html, text, fromName, fromEmail: requestedFromEmail, replyTo, idempotencyKey, workspaceId, providedSettings, unsubscribeUrl, headers = {}, tags = [] }) {
   const settings = providedSettings || (workspaceId ? await Settings.getForWorkspace(workspaceId, true) : await Settings.findOne({ singleton: 'main' }).select('+smtpAppPasswordOverride +providerApiKeyEncrypted +providerSecretEncrypted'));
   const provider = getMailProvider(settings);
   const fromEmail = String(requestedFromEmail || getSenderEmail(provider, settings)).trim().toLowerCase();
@@ -228,10 +228,13 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
           Subject: subject,
           HTMLPart: html,
           TextPart: text,
-          Headers: unsubscribeUrl ? {
+          Headers: {
+            ...headers,
+            ...(unsubscribeUrl ? {
             'List-Unsubscribe': `<${unsubscribeUrl}>`,
             'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          } : undefined,
+            } : {}),
+          },
         }],
       }),
     }, settings);
@@ -257,10 +260,14 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
         subject,
         html,
         text,
-        headers: unsubscribeUrl ? {
-          'List-Unsubscribe': `<${unsubscribeUrl}>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        } : undefined,
+        headers: {
+          ...headers,
+          ...(unsubscribeUrl ? {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          } : {}),
+        },
+        tags,
       }),
     }, settings);
     return {
@@ -283,13 +290,16 @@ async function sendEmail({ to, subject, html, text, fromName, fromEmail: request
     subject,
     html,
     text,
-    headers: unsubscribeUrl ? {
-      'List-Unsubscribe': `<${unsubscribeUrl}>`,
-      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-    } : undefined,
+    headers: {
+      ...headers,
+      ...(unsubscribeUrl ? {
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      } : {}),
+    },
   });
 
-  return info;
+  return { ...info, provider: 'smtp' };
 }
 
 module.exports = {

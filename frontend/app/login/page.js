@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { errMsg } from '@/lib/api';
 import api from '@/lib/api';
@@ -20,34 +21,35 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [plans, setPlans] = useState([]);
 
   useEffect(() => { api.get('/billing/plans').then(({ data }) => setPlans(data.plans)).catch(() => {}); }, []);
-  useEffect(() => { if (admin) router.replace(admin.role === 'superadmin' ? '/super-admin/billing' : '/billing'); }, [admin, router]);
+  useEffect(() => { if (admin) router.replace(admin.role === 'superadmin' ? '/super-admin/billing' : '/dashboard'); }, [admin, router]);
   if (admin) return null;
 
   const submit = async (e) => {
-    e.preventDefault(); setError(''); setNotice(''); setLoading(true);
+    e.preventDefault(); setError(''); setNotice(''); setVerificationRequired(false); setLoading(true);
     try {
-      if (mode === 'magic' || mode === 'forgot') {
-        const endpoint = mode === 'magic' ? '/auth/magic-link' : '/auth/forgot-password';
-        await api.post(endpoint, { email: form.email });
-        setNotice(mode === 'magic' ? 'If that account exists, a secure sign-in link has been sent.' : 'If that account exists, password-reset instructions have been sent.');
+      if (mode === 'forgot') {
+        await api.post('/auth/forgot-password', { email: form.email });
+        setNotice('If that account exists, password-reset instructions have been sent.');
         return;
       }
       if (mode === 'signup') {
         const result = await signup(form);
         if (result.verificationRequired) {
-          setNotice(`We sent a verification link to ${result.email}. Open it to activate your workspace.`);
+          if (result.emailSent) setNotice(`We sent a verification link to ${result.email}. Open it to activate your workspace.`);
+          else setError('Your account was created, but HeyMailer could not send the verification email. Ask an administrator to check platform mail, then use Resend verification.');
           return;
         }
-        router.replace('/billing');
+        router.replace('/dashboard');
       } else {
         const account = await login(form.email, form.password);
-        router.replace(account.role === 'superadmin' ? '/super-admin/billing' : '/billing');
+        router.replace(account.role === 'superadmin' ? '/super-admin/billing' : '/dashboard');
       }
-    } catch (err) { setError(errMsg(err, mode === 'login' ? 'Invalid email or password.' : 'Could not create your account.')); } finally { setLoading(false); }
+    } catch (err) { setVerificationRequired(err?.response?.data?.code === 'EMAIL_NOT_VERIFIED'); setError(errMsg(err, mode === 'login' ? 'Invalid email or password.' : 'Could not create your account.')); } finally { setLoading(false); }
   };
 
   return <main className="min-h-screen bg-[#f6f8f7] lg:grid lg:grid-cols-[1.08fr_.92fr]">
@@ -62,11 +64,11 @@ export default function LoginPage() {
     </section>
 
     <section className="flex items-center justify-center px-6 py-12 sm:px-12">
-      <div className="w-full max-w-md"><div><p className="text-xs font-bold uppercase tracking-widest text-emerald-600">{mode === 'login' ? 'Welcome back' : 'Start your workspace'}</p><h2 className="text-3xl font-bold text-ink mt-2">{mode === 'login' ? 'Sign in to HeyMailer' : 'Create your account'}</h2><p className="text-sm text-ink-soft mt-2">{mode === 'login' ? 'Continue managing your campaigns and audience.' : 'Set up your email workspace in less than a minute.'}</p></div>
+      <div className="w-full max-w-md"><div><p className="text-xs font-bold uppercase tracking-widest text-emerald-600">{mode === 'login' ? 'Welcome back' : mode === 'forgot' ? 'Account recovery' : 'Start your workspace'}</p><h2 className="text-3xl font-bold text-ink mt-2">{mode === 'login' ? 'Sign in to HeyMailer' : mode === 'forgot' ? 'Reset your password' : 'Create your account'}</h2><p className="text-sm text-ink-soft mt-2">{mode === 'login' ? 'Continue managing your campaigns and audience.' : mode === 'forgot' ? 'Enter your email and we’ll send password-reset instructions.' : 'Set up your email workspace in less than a minute.'}</p></div>
         <div className="grid grid-cols-2 bg-surface-line/70 rounded-xl p-1 mt-8"><button className={`rounded-lg py-2 text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm text-ink' : 'text-ink-soft'}`} onClick={() => {setMode('login');setError('');}}>Sign in</button><button className={`rounded-lg py-2 text-sm font-semibold ${mode === 'signup' ? 'bg-white shadow-sm text-ink' : 'text-ink-soft'}`} onClick={() => {setMode('signup');setError('');}}>Create account</button></div>
-        <form onSubmit={submit} className="mt-6 space-y-4">{mode === 'signup' && <><Input label="Your name" value={form.name} onChange={(e) => setForm({...form,name:e.target.value})} placeholder="Ada Lovelace" required/><Input label="Workspace name" value={form.workspaceName} onChange={(e) => setForm({...form,workspaceName:e.target.value})} placeholder="Acme Marketing" required/></>}<Input label="Email address" type="email" value={form.email} onChange={(e) => setForm({...form,email:e.target.value})} placeholder="you@company.com" required/><label className="block"><span className="block text-xs font-semibold text-ink-soft mb-1.5">Password</span><span className="relative block"><input className="w-full rounded-lg border border-surface-line bg-white px-3.5 py-2.5 pr-11 text-sm text-ink focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" type={showPassword?'text':'password'} minLength={8} value={form.password} onChange={(e) => setForm({...form,password:e.target.value})} placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'} required/><button type="button" className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-ink-faint" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></span></label>{error && <p className="text-xs text-danger bg-danger-bg rounded-lg px-3 py-2">{error}</p>}<Button type="submit" size="lg" className="w-full" disabled={loading}>{loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create workspace'} {!loading && <ArrowRight size={16}/>}</Button></form>
-        {mode === 'login' && <div className="flex justify-between text-xs mt-4"><button type="button" className="text-emerald-700 font-semibold hover:underline" onClick={() => { setMode('magic'); setError(''); setNotice(''); }}>Email me a sign-in link</button><button type="button" className="text-ink-soft hover:underline" onClick={() => { setMode('forgot'); setError(''); setNotice(''); }}>Forgot password?</button></div>}
-        {(mode === 'magic' || mode === 'forgot') && <button type="button" className="block mx-auto text-xs text-emerald-700 font-semibold hover:underline mt-4" onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Back to password sign in</button>}
+        <form onSubmit={submit} className="mt-6 space-y-4">{mode === 'signup' && <><Input label="Your name" value={form.name} onChange={(e) => setForm({...form,name:e.target.value})} placeholder="Ada Lovelace" required/><Input label="Workspace name" value={form.workspaceName} onChange={(e) => setForm({...form,workspaceName:e.target.value})} placeholder="Acme Marketing" required/></>}<Input label="Email address" type="email" value={form.email} onChange={(e) => setForm({...form,email:e.target.value})} placeholder="you@company.com" required/>{mode !== 'forgot' && <label className="block"><span className="block text-xs font-semibold text-ink-soft mb-1.5">Password</span><span className="relative block"><input className="w-full rounded-lg border border-surface-line bg-white px-3.5 py-2.5 pr-11 text-sm text-ink focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" type={showPassword?'text':'password'} minLength={8} value={form.password} onChange={(e) => setForm({...form,password:e.target.value})} placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'} required/><button type="button" className="absolute inset-y-0 right-0 w-11 flex items-center justify-center text-ink-faint" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></span></label>}{error && <p className="text-xs text-danger bg-danger-bg rounded-lg px-3 py-2">{error}</p>}{verificationRequired && <Link className="block text-xs font-semibold text-emerald-700 hover:underline" href={`/auth/resend-verification?email=${encodeURIComponent(form.email)}`}>Resend verification email</Link>}{notice && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{notice}</p>}<Button type="submit" size="lg" className="w-full" disabled={loading}>{loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'forgot' ? 'Send reset instructions' : 'Create workspace'} {!loading && <ArrowRight size={16}/>}</Button></form>
+        {mode === 'login' && <div className="flex justify-between text-xs mt-4"><Link className="text-emerald-700 font-semibold hover:underline" href="/auth/magic-link/request">Email me a sign-in link</Link><button type="button" className="text-ink-soft hover:underline" onClick={() => { setMode('forgot'); setError(''); setNotice(''); }}>Forgot password?</button></div>}
+        {mode === 'forgot' && <button type="button" className="block mx-auto text-xs text-emerald-700 font-semibold hover:underline mt-4" onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Back to password sign in</button>}
         <p className="text-[11px] leading-5 text-center text-ink-faint mt-6">By continuing, you agree to responsible email use and permission-based sending. Payments are reviewed before subscription activation.</p>
       </div>
     </section>

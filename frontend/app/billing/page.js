@@ -5,6 +5,7 @@ import AppShell from '@/components/AppShell';
 import { Badge, Button, Card, EmptyState, Input, Modal, Select, Spinner, Textarea, statusTone } from '@/components/ui';
 import api, { errMsg } from '@/lib/api';
 import { Check, Copy, CreditCard, ExternalLink, ShieldCheck } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 
 const explorerUrl = (invoice) => {
   if (!invoice?.transactionHash) return '';
@@ -15,10 +16,11 @@ const explorerUrl = (invoice) => {
 };
 
 export default function BillingPage() {
+  const { refetch } = useAuth();
   const [data, setData] = useState(null);
   const [choice, setChoice] = useState({ planId: '', walletId: '' });
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [proof, setProof] = useState({ transactionHash: '', payerAddress: '', customerNote: '' });
+  const [proof, setProof] = useState({ accountName: '', transactionHash: '', payerAddress: '', customerNote: '', hasRequestedDomain: false, requestedDomain: '' });
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -26,21 +28,26 @@ export default function BillingPage() {
   const load = useCallback(() => api.get('/billing/overview').then(({ data: next }) => {
     setData(next);
     setChoice((value) => ({ planId: value.planId || next.plans[0]?._id || '', walletId: value.walletId || next.wallets[0]?._id || '' }));
-  }), []);
-  useEffect(() => { load().catch((err) => setError(errMsg(err))); }, [load]);
+    if (next.subscription?.status === 'active' && new Date(next.subscription.endsAt) > new Date()) refetch();
+  }), [refetch]);
+  useEffect(() => {
+    load().catch((err) => setError(errMsg(err)));
+    const timer = window.setInterval(() => load().catch(() => {}), 15000);
+    return () => window.clearInterval(timer);
+  }, [load]);
 
   const createInvoice = async () => {
     setSaving(true); setError(''); setNotice('');
     try {
-      const { data: result } = await api.post('/billing/invoices', choice);
+      const { data: result } = await api.post('/billing/invoices', choice, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
       setSelectedInvoice(result.invoice); setNotice('Invoice created. Send the exact amount shown below.'); await load();
     } catch (err) { setError(errMsg(err)); } finally { setSaving(false); }
   };
   const submit = async () => {
     setSaving(true); setError('');
     try {
-      const { data: result } = await api.post(`/billing/invoices/${selectedInvoice._id}/submit`, proof);
-      setNotice(result.message); setSelectedInvoice(null); setProof({ transactionHash: '', payerAddress: '', customerNote: '' }); await load();
+      const { data: result } = await api.post(`/billing/invoices/${selectedInvoice._id}/submit`, proof, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+      setNotice(result.message); setSelectedInvoice(null); setProof({ accountName: '', transactionHash: '', payerAddress: '', customerNote: '', hasRequestedDomain: false, requestedDomain: '' }); await load();
     } catch (err) { setError(errMsg(err)); } finally { setSaving(false); }
   };
 
@@ -76,8 +83,8 @@ export default function BillingPage() {
         </Card>
       </div>
 
-      <Modal open={Boolean(selectedInvoice)} onClose={() => setSelectedInvoice(null)} title={`Pay invoice ${selectedInvoice?.reference || ''}`} size="lg" footer={<><Button variant="ghost" onClick={() => setSelectedInvoice(null)}>Close</Button><Button onClick={submit} disabled={saving || !proof.transactionHash}>{saving ? 'Submitting…' : 'Submit payment for review'}</Button></>}>
-        {selectedInvoice && <div className="space-y-4"><div className="rounded-xl bg-amber-bg text-amber p-4 text-xs"><strong>Use only {selectedInvoice.asset} on {selectedInvoice.network}.</strong> Sending through another network may result in permanent loss.</div><div className="grid sm:grid-cols-2 gap-3"><div className="bg-surface rounded-xl p-4"><p className="text-xs text-ink-soft">Exact amount</p><p className="text-xl font-bold mt-1">{selectedInvoice.amountCrypto} {selectedInvoice.asset}</p></div><div className="bg-surface rounded-xl p-4"><p className="text-xs text-ink-soft">Payment deadline</p><p className="text-sm font-semibold mt-1">{new Date(selectedInvoice.expiresAt).toLocaleString()}</p></div></div><div><p className="text-xs font-semibold text-ink-soft mb-1.5">Receiving address</p><div className="flex gap-2"><code className="flex-1 break-all bg-surface rounded-lg px-3 py-2.5 text-xs">{selectedInvoice.walletAddress}</code><Button variant="secondary" onClick={() => navigator.clipboard.writeText(selectedInvoice.walletAddress)}><Copy size={15} /></Button></div></div><Input label="Transaction hash" value={proof.transactionHash} onChange={(e) => setProof({ ...proof, transactionHash: e.target.value })} placeholder="Paste the blockchain transaction hash" /><Input label="Sending wallet address (optional)" value={proof.payerAddress} onChange={(e) => setProof({ ...proof, payerAddress: e.target.value })} /><Textarea label="Note (optional)" rows={3} value={proof.customerNote} onChange={(e) => setProof({ ...proof, customerNote: e.target.value })} /></div>}
+      <Modal open={Boolean(selectedInvoice)} onClose={() => setSelectedInvoice(null)} title={`Pay invoice ${selectedInvoice?.reference || ''}`} size="lg" footer={<><Button variant="ghost" onClick={() => setSelectedInvoice(null)}>Close</Button><Button onClick={submit} disabled={saving || proof.accountName.trim().length < 2}>{saving ? 'Submitting…' : 'Submit payment for review'}</Button></>}>
+        {selectedInvoice && <div className="space-y-4"><div className="rounded-xl bg-amber-bg text-amber p-4 text-xs"><strong>Use only {selectedInvoice.asset} on {selectedInvoice.network}.</strong> Sending through another network may result in permanent loss.</div><div className="grid sm:grid-cols-2 gap-3"><div className="bg-surface rounded-xl p-4"><p className="text-xs text-ink-soft">Exact amount</p><p className="text-xl font-bold mt-1">{selectedInvoice.amountCrypto} {selectedInvoice.asset}</p></div><div className="bg-surface rounded-xl p-4"><p className="text-xs text-ink-soft">Payment deadline</p><p className="text-sm font-semibold mt-1">{new Date(selectedInvoice.expiresAt).toLocaleString()}</p></div></div><div><p className="text-xs font-semibold text-ink-soft mb-1.5">Receiving address</p><div className="flex gap-2"><code className="flex-1 break-all bg-surface rounded-lg px-3 py-2.5 text-xs">{selectedInvoice.walletAddress}</code><Button variant="secondary" onClick={() => navigator.clipboard.writeText(selectedInvoice.walletAddress)}><Copy size={15} /></Button></div></div><Input label="Account name" value={proof.accountName} onChange={(e) => setProof({ ...proof, accountName: e.target.value })} placeholder="Name shown on the account or wallet" required/><Input label="Transaction hash (optional)" value={proof.transactionHash} onChange={(e) => setProof({ ...proof, transactionHash: e.target.value })} placeholder="Transaction ID from your wallet receipt" /><p className="-mt-2 text-xs text-ink-soft">Providing the transaction ID helps us verify payment faster. You may leave it blank for manual review.</p><Input label="Sending wallet address (optional)" value={proof.payerAddress} onChange={(e) => setProof({ ...proof, payerAddress: e.target.value })} /><Select label="Do you have a domain you want to use?" value={proof.hasRequestedDomain ? 'yes' : 'no'} onChange={(e) => setProof({ ...proof, hasRequestedDomain: e.target.value === 'yes', requestedDomain: e.target.value === 'yes' ? proof.requestedDomain : '' })}><option value="no">No</option><option value="yes">Yes</option></Select>{proof.hasRequestedDomain && <Input label="Domain" value={proof.requestedDomain} onChange={(e) => setProof({ ...proof, requestedDomain: e.target.value })} placeholder="example.com" required/>}<Textarea label="Payment note (optional)" rows={3} value={proof.customerNote} onChange={(e) => setProof({ ...proof, customerNote: e.target.value })} /></div>}
       </Modal>
     </AppShell>
   );

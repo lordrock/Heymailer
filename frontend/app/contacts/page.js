@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { Card, Button, Badge, statusTone, Input, Select, Modal, EmptyState, Spinner } from '@/components/ui';
 import api, { errMsg } from '@/lib/api';
@@ -22,18 +22,22 @@ export default function ContactsPage() {
   const fileRef = useRef(null);
   const limit = 20;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data } = await api.get('/contacts', { params: { search: search || undefined, page, limit } });
     setContacts(data.contacts);
     setTotal(data.total);
-  };
+  }, [page, search]);
 
   useEffect(() => { api.get('/contact-groups').then((res) => setGroups(res.data.groups)); }, []);
-  useEffect(() => { load(); }, [page]);
   useEffect(() => {
-    const t = setTimeout(() => { setPage(1); load(); }, 350);
+    const t = setTimeout(load, 350);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [load]);
+
+  const updateSearch = (value) => {
+    setPage(1);
+    setSearch(value);
+  };
 
   const openNew = () => setEditing({ firstName: '', lastName: '', email: '', tags: [], groups: [], status: 'active' });
 
@@ -98,7 +102,7 @@ export default function ContactsPage() {
     >
       <div className="relative max-w-sm mb-5">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-        <Input placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        <Input placeholder="Search name or email…" value={search} onChange={(e) => updateSearch(e.target.value)} className="pl-9" />
       </div>
 
       {!contacts ? (

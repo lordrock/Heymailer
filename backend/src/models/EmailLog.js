@@ -20,6 +20,12 @@ const emailLogSchema = new mongoose.Schema(
 
     attempt: { type: Number, default: 0 },
     smtpResponse: { type: String },
+    provider: { type: String, default: '' },
+    providerMessageId: { type: String, index: true },
+    deliveryStatus: { type: String, default: 'pending', index: true },
+    deliveredAt: Date,
+    openedAt: Date,
+    clickedAt: Date,
     errorMessage: { type: String },
     sentAt: { type: Date },
     deliveryEventAt: { type: Date },

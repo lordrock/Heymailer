@@ -7,6 +7,7 @@ const { sanitizeEmailHtml } = require('../utils/sanitize');
 const { resolveVariables } = require('../services/templateEngine');
 const { sendEmail } = require('../services/mailer');
 const queue = require('../services/queue');
+const { startPlacementTest } = require('../services/placementEngine');
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,12 +34,18 @@ async function getOne(req, res) {
   const campaign = await Campaign.findById(req.params.id).populate('templateId', 'name').populate('groupIds', 'name');
   if (!campaign) return res.status(404).json({ message: 'Campaign not found.' });
 
-  const logCounts = await EmailLog.aggregate([
-    { $match: { campaignId: campaign._id } },
-    { $group: { _id: '$status', count: { $sum: 1 } } },
+  const [logCounts, deliveryCounts] = await Promise.all([
+    EmailLog.aggregate([
+      { $match: { campaignId: campaign._id } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    EmailLog.aggregate([
+      { $match: { campaignId: campaign._id } },
+      { $group: { _id: '$deliveryStatus', count: { $sum: 1 } } },
+    ]),
   ]);
 
-  res.json({ campaign, logCounts });
+  res.json({ campaign, logCounts, deliveryCounts });
 }
 
 async function resolveRecipientPreview(req, res) {
@@ -178,7 +185,7 @@ async function sendTest(req, res) {
   const resolvedSubject = resolveVariables(`[TEST] ${subject || ''}`, { contact: fakeContact, settings, baseUrl });
 
   try {
-    await sendEmail({
+    const info = await sendEmail({
       to: testEmail,
       subject: resolvedSubject,
       html,
@@ -194,6 +201,9 @@ async function sendTest(req, res) {
       recipientEmail: testEmail,
       subject: resolvedSubject,
       status: 'sent',
+      provider: info.provider || 'smtp',
+      providerMessageId: info.messageId,
+      deliveryStatus: 'sent',
       isTest: true,
       sentAt: new Date(),
     });
@@ -218,7 +228,14 @@ async function startSend(req, res) {
 
   try {
     const updated = await queue.enqueueCampaign(campaign._id);
-    res.json({ campaign: updated, message: 'Campaign queued for sending.' });
+    let placementMessage = '';
+    try {
+      await startPlacementTest({ workspaceId: req.admin.workspaceId, campaignId: campaign._id, createdBy: req.admin._id, mode: 'live' });
+      placementMessage = ' Live seed monitoring also started.';
+    } catch (placementError) {
+      if (!/No enabled placement seed/.test(placementError.message)) console.error('[placement] live test:', placementError.message);
+    }
+    res.json({ campaign: updated, message: `Campaign queued for sending.${placementMessage}` });
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message });
   }

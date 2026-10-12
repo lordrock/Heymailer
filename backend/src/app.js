@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
+const { RedisStore } = require('rate-limit-redis');
 
 const authRoutes = require('./routes/authRoutes');
 const templateRoutes = require('./routes/templateRoutes');
@@ -18,16 +19,18 @@ const publicRoutes = require('./routes/publicRoutes');
 const billingRoutes = require('./routes/billingRoutes');
 const adminBillingRoutes = require('./routes/adminBillingRoutes');
 const adminWorkspaceRoutes = require('./routes/adminWorkspaceRoutes');
+const adminDeliverabilityRoutes = require('./routes/adminDeliverabilityRoutes');
+const healthRoutes = require('./routes/healthRoutes');
+const webhookRoutes = require('./routes/webhookRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { requireAuth, requireActiveSubscription } = require('./middleware/auth');
 const { bindTenant } = require('./middleware/tenant');
+const { getFrontendOrigins } = require('./config/frontendUrl');
+const { getRedisClient } = require('./config/redis');
 
 const app = express();
 
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3100')
-  .split(',')
-  .map((origin) => origin.trim().replace(/\/+$/, ''))
-  .filter(Boolean);
+const allowedOrigins = getFrontendOrigins();
 
 app.set('trust proxy', 1);
 
@@ -49,19 +52,33 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({
+  limit: '5mb',
+  verify(req, _res, buffer) {
+    if (req.originalUrl === '/api/webhooks/resend') req.rawBody = Buffer.from(buffer);
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+const redis = getRedisClient();
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 600,
   standardHeaders: true,
   legacyHeaders: false,
+  ...(redis ? { store: new RedisStore({ sendCommand: (...args) => redis.sendCommand(args), prefix: 'heymailer:rate:api:' }) } : {}),
 });
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  ...(redis ? { store: new RedisStore({ sendCommand: (...args) => redis.sendCommand(args), prefix: 'heymailer:rate:webhook:' }) } : {}),
+});
+app.use('/api/health', healthRoutes);
+app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 app.use('/api', apiLimiter);
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'heymailer-email-system' }));
 
 app.use('/api/auth', authRoutes);
 const workspaceAccess = [requireAuth, requireActiveSubscription, bindTenant];
@@ -77,6 +94,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/super-admin/billing', adminBillingRoutes);
 app.use('/api/super-admin/workspaces', adminWorkspaceRoutes);
+app.use('/api/super-admin/deliverability', adminDeliverabilityRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -23,11 +23,8 @@ api.interceptors.response.use(
   (err) => {
     if (typeof window !== 'undefined' && err?.response?.status === 401) {
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
-      const onLogin = window.location.pathname.startsWith('/login');
-      if (!onLogin) window.location.href = '/login';
-    }
-    if (typeof window !== 'undefined' && err?.response?.status === 402 && !window.location.pathname.startsWith('/billing')) {
-      window.location.href = '/billing';
+      const onPublicAuthRoute = window.location.pathname === '/login' || window.location.pathname.startsWith('/auth/');
+      if (!onPublicAuthRoute) window.location.replace(new URL('/login', window.location.origin).toString());
     }
     return Promise.reject(err);
   }

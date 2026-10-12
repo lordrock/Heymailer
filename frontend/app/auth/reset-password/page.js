@@ -2,12 +2,16 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { errMsg } from '@/lib/api';
 import { Button, Input } from '@/components/ui';
 
 export default function ResetPasswordPage() {
+  return <Suspense fallback={<main className="min-h-screen bg-emerald-deep flex items-center justify-center p-6"><p className="text-white">Loading password reset…</p></main>}><ResetPasswordContent/></Suspense>;
+}
+
+function ResetPasswordContent() {
   const token = useSearchParams().get('token'); const router = useRouter();
   const [password, setPassword] = useState(''); const [confirm, setConfirm] = useState(''); const [error, setError] = useState(''); const [done, setDone] = useState(false); const [saving, setSaving] = useState(false);
   const submit = async (event) => { event.preventDefault(); setError(''); if (!token) return setError('This reset link is missing its token.'); if (password !== confirm) return setError('Passwords do not match.'); setSaving(true); try { await api.post('/auth/reset-password', { token, password }); setDone(true); setTimeout(() => router.replace('/login'), 1000); } catch (err) { setError(errMsg(err)); } finally { setSaving(false); } };

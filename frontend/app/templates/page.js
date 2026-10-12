@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { Card, Button, Badge, Input, Select, Modal, EmptyState, Spinner } from '@/components/ui';
@@ -22,17 +22,16 @@ export default function TemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data } = await api.get('/templates', { params: { category, search: search || undefined } });
     setTemplates(data.templates);
     setCategories(data.categories);
-  };
+  }, [category, search]);
 
-  useEffect(() => { load(); }, [category]);
   useEffect(() => {
     const t = setTimeout(load, 350);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [load]);
 
   const openNew = () => setEditing({
     name: '', category: 'Marketing', subject: '', preheader: '',

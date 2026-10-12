@@ -23,8 +23,14 @@ const invoiceSchema = new mongoose.Schema(
       index: true,
     },
     transactionHash: { type: String, trim: true },
+    accountName: { type: String, trim: true, default: '' },
     payerAddress: { type: String, trim: true, default: '' },
     customerNote: { type: String, trim: true, default: '' },
+    hasRequestedDomain: { type: Boolean, default: false },
+    requestedDomain: { type: String, trim: true, lowercase: true, default: '' },
+    createIdempotencyKey: { type: String, trim: true },
+    submissionIdempotencyKey: { type: String, trim: true },
+    reviewIdempotencyKey: { type: String, trim: true },
     submittedAt: Date,
     expiresAt: { type: Date, required: true, index: true },
     reviewedAt: Date,
@@ -37,6 +43,10 @@ const invoiceSchema = new mongoose.Schema(
 invoiceSchema.index(
   { asset: 1, network: 1, transactionHash: 1 },
   { unique: true, partialFilterExpression: { transactionHash: { $exists: true, $type: 'string' } } }
+);
+invoiceSchema.index(
+  { userId: 1, createIdempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { createIdempotencyKey: { $exists: true, $type: 'string' } } }
 );
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

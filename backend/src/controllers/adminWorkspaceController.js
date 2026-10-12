@@ -2,6 +2,7 @@ const Admin = require('../models/Admin');
 const Workspace = require('../models/Workspace');
 const Settings = require('../models/Settings');
 const Subscription = require('../models/Subscription');
+const AuditLog = require('../models/AuditLog');
 const { encryptSecret } = require('../utils/credentialCrypto');
 const { verifyConnection, invalidateTransporterCache } = require('../services/mailer');
 
@@ -114,4 +115,29 @@ async function testProvider(req, res) {
   res.json({ connected: true, message: `${settings.mailProvider} credentials connected successfully.` });
 }
 
-module.exports = { list, getOne, updateIdentity, testProvider };
+async function updateStatus(req, res) {
+  const status = String(req.body.status || '').toLowerCase();
+  if (!['active', 'suspended'].includes(status)) {
+    return res.status(400).json({ message: 'Workspace status must be active or suspended.' });
+  }
+  const workspace = await Workspace.findById(req.params.id);
+  if (!workspace) return res.status(404).json({ message: 'Workspace not found.' });
+  const owner = await Admin.findById(workspace.ownerId);
+  if (!owner) return res.status(409).json({ message: 'The workspace owner account could not be found.' });
+
+  workspace.status = status;
+  owner.status = status;
+  await Promise.all([
+    workspace.save(),
+    owner.save(),
+    AuditLog.create({ actorId: req.admin._id, action: `workspace.${status}`, targetType: 'Workspace', targetId: workspace._id, metadata: { ownerId: owner._id } }),
+  ]);
+  res.json({
+    workspace,
+    message: status === 'active'
+      ? 'Workspace and owner account activated.'
+      : 'Workspace and owner account suspended.',
+  });
+}
+
+module.exports = { list, getOne, updateIdentity, testProvider, updateStatus };

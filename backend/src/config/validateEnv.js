@@ -1,12 +1,17 @@
+const { getFrontendOrigins } = require('./frontendUrl');
+
 function validateProductionEnv() {
   if (process.env.NODE_ENV !== 'production') return;
 
   const errors = [];
-  const required = ['MONGODB_URI', 'JWT_SECRET', 'UNSUBSCRIBE_SECRET', 'CLIENT_URL', 'SERVER_BASE_URL'];
+  const required = ['MONGODB_URI', 'JWT_SECRET', 'UNSUBSCRIBE_SECRET', 'SERVER_BASE_URL', 'REDIS_URL'];
 
   required.forEach((name) => {
     if (!process.env[name]) errors.push(`${name} is required`);
   });
+  if (!process.env.FRONTEND_URL && !process.env.CLIENT_URL) {
+    errors.push('FRONTEND_URL is required');
+  }
 
   ['JWT_SECRET', 'UNSUBSCRIBE_SECRET'].forEach((name) => {
     if (process.env[name] && process.env[name].length < 32) {
@@ -19,11 +24,12 @@ function validateProductionEnv() {
     errors.push('SMTP_CREDENTIALS_ENCRYPTION_KEY must contain at least 32 characters');
   }
 
-  ['CLIENT_URL', 'SERVER_BASE_URL'].forEach((name) => {
-    if (process.env[name] && !process.env[name].startsWith('https://')) {
-      errors.push(`${name} must use https:// in production`);
-    }
+  getFrontendOrigins().forEach((origin) => {
+    if (!origin.startsWith('https://')) errors.push('Every FRONTEND_URL origin must use https:// in production');
   });
+  if (process.env.SERVER_BASE_URL && !process.env.SERVER_BASE_URL.startsWith('https://')) {
+    errors.push('SERVER_BASE_URL must use https:// in production');
+  }
 
   if (process.env.COOKIE_SAME_SITE && !['lax', 'strict', 'none'].includes(process.env.COOKIE_SAME_SITE.toLowerCase())) {
     errors.push('COOKIE_SAME_SITE must be lax, strict, or none');

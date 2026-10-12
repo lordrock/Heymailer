@@ -33,13 +33,26 @@ export default function WorkspacesPage() {
     setSaving(true); setError('');
     try { const { data } = await api.post(`/super-admin/workspaces/${selected._id}/test-provider`); setNotice(data.message); } catch (err) { setError(errMsg(err)); } finally { setSaving(false); }
   };
+  const changeStatus = async (workspace) => {
+    const status = workspace.status === 'active' ? 'suspended' : 'active';
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const { data } = await api.patch(`/super-admin/workspaces/${workspace._id}/status`, { status });
+      setNotice(data.message);
+      await load();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!workspaces) return <AppShell title="Workspaces"><div className="flex justify-center py-24"><Spinner size={30}/></div></AppShell>;
   const filtered = workspaces.filter((item) => `${item.name} ${item.owner?.name || ''} ${item.owner?.email || ''}`.toLowerCase().includes(query.toLowerCase()));
   return <AppShell title="Workspace Administration"><div className="space-y-6">
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"><div><h1 className="text-xl font-bold text-ink">Customer workspaces</h1><p className="text-sm text-ink-soft mt-1">Control provider credentials, domains, From addresses and sending readiness.</p></div><div className="relative"><Search size={15} className="absolute left-3 top-3 text-ink-faint"/><input className="rounded-lg border border-surface-line bg-white pl-9 pr-3 py-2.5 text-sm outline-none focus:border-emerald-600" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workspaces"/></div></div>
     {error && !selected && <p className="rounded-xl bg-danger-bg text-danger px-4 py-3 text-sm">{error}</p>}
-    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{filtered.map((workspace) => <Card key={workspace._id} className="p-5"><div className="flex items-start justify-between"><div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><Building2 size={19}/></div><Badge tone={workspace.sendingEnabled ? 'success' : 'warning'}>{workspace.sendingEnabled ? 'Ready to send' : 'Setup needed'}</Badge></div><h2 className="font-bold text-ink mt-4">{workspace.name}</h2><p className="text-xs text-ink-soft mt-1">{workspace.owner?.email || 'No owner found'}</p><div className="grid grid-cols-2 gap-2 mt-4 text-xs"><div className="bg-surface rounded-lg p-2.5"><p className="text-ink-faint">Plan</p><p className="font-semibold mt-0.5">{workspace.subscription?.planId?.name || 'No plan'}</p></div><div className="bg-surface rounded-lg p-2.5"><p className="text-ink-faint">Provider</p><p className="font-semibold mt-0.5">{workspace.identity?.mailProvider?.toUpperCase() || 'Not set'}</p></div></div><Button variant="secondary" className="w-full mt-4" onClick={() => open(workspace)}>Configure sending</Button></Card>)}</div>
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">{filtered.map((workspace) => <Card key={workspace._id} className="p-5"><div className="flex items-start justify-between"><div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><Building2 size={19}/></div><div className="flex gap-2"><Badge tone={workspace.status === 'active' ? 'success' : 'danger'}>{workspace.status}</Badge><Badge tone={workspace.sendingEnabled ? 'success' : 'warning'}>{workspace.sendingEnabled ? 'Ready to send' : 'Setup needed'}</Badge></div></div><h2 className="font-bold text-ink mt-4">{workspace.name}</h2><p className="text-xs text-ink-soft mt-1">{workspace.owner?.email || 'No owner found'}</p>{workspace.hasRequestedDomain && <p className="text-xs text-emerald-700 font-semibold mt-2">Requested domain: {workspace.requestedDomain}</p>}<div className="grid grid-cols-2 gap-2 mt-4 text-xs"><div className="bg-surface rounded-lg p-2.5"><p className="text-ink-faint">Plan</p><p className="font-semibold mt-0.5">{workspace.subscription?.status === 'active' ? workspace.subscription?.planId?.name : 'No active plan'}</p></div><div className="bg-surface rounded-lg p-2.5"><p className="text-ink-faint">Provider</p><p className="font-semibold mt-0.5">{workspace.identity?.mailProvider?.toUpperCase() || 'Not set'}</p></div></div><div className="grid grid-cols-2 gap-2 mt-4"><Button variant="secondary" onClick={() => open(workspace)}>Configure sending</Button><Button variant={workspace.status === 'active' ? 'danger' : 'primary'} disabled={saving} onClick={() => changeStatus(workspace)}>{workspace.status === 'active' ? 'Suspend' : 'Activate'}</Button></div></Card>)}</div>
     {!filtered.length && <Card className="p-12 text-center text-sm text-ink-soft">No workspaces match your search.</Card>}
   </div>
 

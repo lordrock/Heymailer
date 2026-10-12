@@ -25,10 +25,6 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ message: 'Session expired or invalid. Please log in again.' });
     }
 
-    if (admin.status === 'suspended') {
-      return res.status(403).json({ message: 'This account has been suspended.' });
-    }
-
     req.admin = admin;
     next();
   } catch (err) {
@@ -45,6 +41,9 @@ function requireSuperAdmin(req, res, next) {
 
 async function requireActiveSubscription(req, res, next) {
   if (req.admin?.role === 'superadmin') return next();
+  if (req.admin?.status === 'suspended') {
+    return res.status(403).json({ message: 'This workspace is suspended. Contact HeyMailer support.', code: 'ACCOUNT_SUSPENDED' });
+  }
   const subscription = await Subscription.findOne({ userId: req.admin._id, status: 'active', endsAt: { $gt: new Date() } });
   if (!subscription) {
     return res.status(402).json({ message: 'An active subscription is required to use workspace features.', code: 'SUBSCRIPTION_REQUIRED' });

@@ -27,6 +27,7 @@ function errorHandler(err, req, res, next) {
   else console.warn(`[request] ${req.method} ${req.originalUrl} failed (${status}): ${err.message}`);
   res.status(status).json({
     message: status === 500 ? 'Something went wrong on our end.' : err.message,
+    ...(err.code ? { code: err.code } : {}),
   });
 }
 

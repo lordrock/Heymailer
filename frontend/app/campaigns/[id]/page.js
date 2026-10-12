@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { Card, Button, Badge, statusTone, Spinner } from '@/components/ui';
 import api, { errMsg } from '@/lib/api';
-import { XCircle, ArrowLeft } from 'lucide-react';
+import { XCircle, ArrowLeft, Inbox, FlaskConical } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function CampaignDetailPage() {
@@ -13,22 +13,37 @@ export default function CampaignDetailPage() {
   const router = useRouter();
   const [campaign, setCampaign] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [deliveryCounts, setDeliveryCounts] = useState([]);
+  const [placementTests, setPlacementTests] = useState([]);
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const placementRunning = placementTests.some((test) => test.status === 'running');
 
   const load = useCallback(async () => {
-    const { data } = await api.get(`/campaigns/${id}`);
+    const [{ data }, logsRes, placementRes] = await Promise.all([
+      api.get(`/campaigns/${id}`),
+      api.get('/email-logs', { params: { campaignId: id, limit: 50 } }),
+      api.get(`/campaigns/${id}/placement`),
+    ]);
     setCampaign(data.campaign);
-    const logsRes = await api.get('/email-logs', { params: { campaignId: id, limit: 50 } });
     setLogs(logsRes.data.logs);
+    setDeliveryCounts(data.deliveryCounts || []);
+    setPlacementTests(placementRes.data.tests || []);
   }, [id]);
 
   useEffect(() => {
     load();
     const interval = setInterval(() => {
-      if (campaign?.status === 'sending') load();
+      if (campaign?.status === 'sending' || placementRunning) load();
     }, 8000);
     return () => clearInterval(interval);
-  }, [load, campaign?.status]);
+  }, [load, campaign?.status, placementRunning]);
+
+  const startPlacement = async () => {
+    setBusy(true); setError('');
+    try { await api.post(`/campaigns/${id}/placement`); await load(); }
+    catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
+  };
 
   const cancel = async () => {
     if (!confirm('Cancel this campaign? Pending sends will be marked as failed.')) return;
@@ -50,6 +65,8 @@ export default function CampaignDetailPage() {
   const progressPct = campaign.recipientCount
     ? Math.round(((campaign.sentCount + campaign.failedCount) / campaign.recipientCount) * 100)
     : 0;
+  const latestPlacement = placementTests[0];
+  const delivery = Object.fromEntries(deliveryCounts.map((item) => [item._id || 'pending', item.count]));
 
   return (
     <AppShell
@@ -63,6 +80,7 @@ export default function CampaignDetailPage() {
         </div>
       }
     >
+      {error && <div className="mb-5 rounded-xl bg-danger-bg text-danger px-4 py-3 text-sm">{error}</div>}
       <div className="grid lg:grid-cols-3 gap-5 mb-6">
         <Card className="p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
@@ -108,6 +126,21 @@ export default function CampaignDetailPage() {
         </Card>
       </div>
 
+      <Card className="p-5 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3"><div><h3 className="text-sm font-bold text-ink">Provider delivery</h3><p className="text-xs text-ink-soft mt-1">Updated by signed Resend webhook events. Delivery confirms provider acceptance, not the inbox folder.</p></div></div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-4">{['sent', 'delivered', 'delayed', 'opened', 'clicked', 'bounced', 'complained'].map((key) => <Metric key={key} label={key} value={delivery[key] || 0} />)}</div>
+      </Card>
+
+      <Card className="p-5 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3"><div><h3 className="text-sm font-bold text-ink flex items-center gap-2"><Inbox size={17}/> Inbox placement</h3><p className="text-xs text-ink-soft mt-1">Estimated from controlled seed inboxes. It cannot reveal every subscriber&apos;s private mailbox folder.</p></div><Button size="sm" variant="secondary" onClick={startPlacement} disabled={busy || latestPlacement?.status === 'running'}><FlaskConical size={14}/>{latestPlacement?.status === 'running' ? 'Test running…' : 'Run placement test'}</Button></div>
+        {!latestPlacement ? <div className="py-8 text-center text-sm text-ink-soft">No placement test has been run for this campaign.</div> : <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mt-5">
+            <Metric label="Test emails" value={latestPlacement.metrics.total}/><Metric label="Inbox" value={latestPlacement.metrics.inbox}/><Metric label="Gmail Primary" value={latestPlacement.metrics.primary}/><Metric label="Promotions" value={latestPlacement.metrics.promotions}/><Metric label="Spam / Junk" value={latestPlacement.metrics.spam}/><Metric label="Missing / pending" value={latestPlacement.metrics.missing + latestPlacement.metrics.pending}/><Metric label="Inbox estimate" value={latestPlacement.metrics.estimatedInboxPercentage == null ? '—' : `${latestPlacement.metrics.estimatedInboxPercentage}%`}/>
+          </div>
+          <div className="overflow-x-auto mt-5"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-ink-faint uppercase border-b border-surface-line"><th className="py-2">Provider</th><th className="py-2">Primary / Inbox</th><th className="py-2">Promotions</th><th className="py-2">Social</th><th className="py-2">Updates</th><th className="py-2">Spam / Junk</th><th className="py-2">Missing / Pending</th></tr></thead><tbody>{Object.entries(latestPlacement.metrics.providers).map(([provider, values]) => <tr key={provider} className="border-b border-surface-line last:border-0"><td className="py-3 font-semibold capitalize">{provider}</td><td className="py-3">{(values.primary || 0) + (values.inbox || 0)}</td><td className="py-3">{values.promotions || 0}</td><td className="py-3">{values.social || 0}</td><td className="py-3">{values.updates || 0}</td><td className="py-3">{values.spam || 0}</td><td className="py-3">{(values.missing || 0) + (values.pending || 0)}</td></tr>)}</tbody></table></div>
+        </>}
+      </Card>
+
       <Card className="overflow-hidden">
         <div className="px-5 py-4 border-b border-surface-line">
           <h3 className="text-sm font-bold text-ink">Send Log</h3>
@@ -135,4 +168,8 @@ export default function CampaignDetailPage() {
       </Card>
     </AppShell>
   );
+}
+
+function Metric({ label, value }) {
+  return <div className="rounded-lg bg-surface p-3"><p className="text-lg font-bold text-ink">{value}</p><p className="text-[11px] text-ink-soft capitalize">{label}</p></div>;
 }

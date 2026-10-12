@@ -1,14 +1,9 @@
 /**
  * In-app sending queue.
  *
- * Why not Redis/BullMQ: at HeyMailer's current volume, a durable queue
- * backed by MongoDB (the single source of truth already used everywhere
- * else) is simpler to operate and just as safe — every unit of work is an
- * EmailLog document with a status, so a server restart mid-campaign just
- * resumes from wherever the pending logs are. If sending volume grows far
- * beyond a few thousand contacts, swap this poller for BullMQ without
- * touching the rest of the app — `sendNextBatch` is the only function that
- * would need to move into a worker process.
+ * MongoDB remains the durable job ledger. Redis supplies a per-campaign
+ * distributed lock so multiple Render instances cannot process one batch at
+ * the same time.
  */
 const Campaign = require('../models/Campaign');
 const EmailLog = require('../models/EmailLog');
@@ -18,11 +13,34 @@ const Unsubscribe = require('../models/Unsubscribe');
 const { sendEmail } = require('./mailer');
 const { resolveVariables } = require('./templateEngine');
 const { buildUnsubscribeUrl } = require('../utils/unsubscribeToken');
+const { getRedisClient } = require('../config/redis');
+const crypto = require('crypto');
 
 const POLL_INTERVAL_MS = Number(process.env.QUEUE_POLL_INTERVAL_MS) || 10000;
 
 let pollHandle = null;
 let ticking = false;
+
+async function withCampaignLock(campaignId, work, { skipIfLocked = true } = {}) {
+  const redis = getRedisClient();
+  if (!redis?.isReady) return work();
+  const key = `heymailer:queue:campaign:${campaignId}`;
+  const token = crypto.randomUUID();
+  const ttl = Number(process.env.QUEUE_LOCK_TTL_MS) || 300000;
+  const acquired = await redis.set(key, token, { NX: true, PX: ttl });
+  if (!acquired) {
+    if (skipIfLocked) return undefined;
+    throw Object.assign(new Error('This campaign operation is already in progress.'), { status: 409 });
+  }
+  try {
+    return await work();
+  } finally {
+    await redis.eval(
+      'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end',
+      { keys: [key], arguments: [token] }
+    ).catch((error) => console.error('[queue] failed to release Redis lock:', error.message));
+  }
+}
 
 async function resolveRecipients(campaign) {
   const Contact = require('../models/Contact');
@@ -49,17 +67,19 @@ async function resolveRecipients(campaign) {
  * campaign to "sending" so the poller picks it up on its next tick.
  */
 async function enqueueCampaign(campaignId) {
-  const campaign = await Campaign.findById(campaignId);
-  if (!campaign) throw Object.assign(new Error('Campaign not found.'), { status: 404 });
+  return withCampaignLock(campaignId.toString(), async () => {
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) throw Object.assign(new Error('Campaign not found.'), { status: 404 });
+    if (campaign.status === 'sending' || campaign.status === 'completed') return campaign;
 
-  const recipients = await resolveRecipients(campaign);
-  if (recipients.length === 0) {
-    throw Object.assign(new Error('No eligible recipients (check groups/contacts and unsubscribe list).'), {
-      status: 400,
-    });
-  }
+    const recipients = await resolveRecipients(campaign);
+    if (recipients.length === 0) {
+      throw Object.assign(new Error('No eligible recipients (check groups/contacts and unsubscribe list).'), {
+        status: 400,
+      });
+    }
 
-  const logs = recipients.map((contact) => ({
+    const logs = recipients.map((contact) => ({
     campaignId: campaign._id,
     workspaceId: campaign.workspaceId,
     contactId: contact._id,
@@ -67,20 +87,21 @@ async function enqueueCampaign(campaignId) {
     subject: campaign.subject,
     templateId: campaign.templateId,
     status: 'pending',
-  }));
-  await EmailLog.insertMany(logs);
+    }));
+    await EmailLog.insertMany(logs);
 
-  campaign.recipientCount = recipients.length;
-  campaign.pendingCount = recipients.length;
-  campaign.sentCount = 0;
-  campaign.failedCount = 0;
-  campaign.status = 'sending';
-  campaign.startedAt = new Date();
-  campaign.lastBatchAt = null;
-  await campaign.save();
+    campaign.recipientCount = recipients.length;
+    campaign.pendingCount = recipients.length;
+    campaign.sentCount = 0;
+    campaign.failedCount = 0;
+    campaign.status = 'sending';
+    campaign.startedAt = new Date();
+    campaign.lastBatchAt = null;
+    await campaign.save();
 
-  ensurePolling();
-  return campaign;
+    ensurePolling();
+    return campaign;
+  }, { skipIfLocked: false });
 }
 
 async function sendOneLog(log, campaign, settings, baseUrl) {
@@ -107,6 +128,9 @@ async function sendOneLog(log, campaign, settings, baseUrl) {
 
     log.status = 'sent';
     log.smtpResponse = info?.response || 'OK';
+    log.provider = info?.provider || '';
+    log.providerMessageId = info?.messageId || '';
+    log.deliveryStatus = 'sent';
     log.sentAt = new Date();
     log.attempt += 1;
     await log.save();
@@ -162,7 +186,7 @@ async function tick() {
 
       if (dueForNextBatch) {
         // eslint-disable-next-line no-await-in-loop
-        await processCampaignBatch(campaign, settings, baseUrl);
+        await withCampaignLock(campaign._id.toString(), () => processCampaignBatch(campaign, settings, baseUrl));
       }
     }
   } catch (err) {
